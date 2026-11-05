@@ -51,3 +51,15 @@ Plus `GET /health` (sans jeton).
 - Les dates sont des heures « murales » sans fuseau (contrat du MCP) ; voir `src/lib/dates.ts`.
 - `GET /exercices` sans `niveau` : tri du plus facile au plus difficile (TODO : tenir compte des difficultés).
 - `url_ical` est stockée en clair (elle contient un jeton Moodle) : chiffrement à prévoir.
+
+## Documentation Swagger
+
+Une fois `npm run dev` lancé : **http://localhost:8001/docs**
+
+1. Clique sur **Authorize** (cadenas) et colle ton `BACKEND_TOKEN`.
+2. Ouvre une route, clique sur **Try it out**, remplis les champs, puis **Execute**.
+
+- Document brut : `http://localhost:8001/docs/json`
+- Export dans un fichier : `npm run docs:export` (crée `docs/openapi.json`, importable dans Postman)
+- Le document est écrit à la main dans `src/docs/openapi.ts` : le mettre à jour quand une route change.
+- En production : `ENABLE_DOCS=false`.

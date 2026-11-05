@@ -10,6 +10,8 @@ const schema = z.object({
   BACKEND_TOKEN: z.string().min(16, "BACKEND_TOKEN doit faire au moins 16 caractères"),
   DATABASE_URL: z.string().min(1),
   AGENDA_HOTE_AUTORISE: z.string().default("moodle.ephec.be"),
+  // Swagger UI sur /docs. Mettre "false" en production pour ne pas exposer la documentation.
+  ENABLE_DOCS: z.enum(["true", "false"]).default("true").transform((v) => v === "true"),
 });
 
 const resultat = schema.safeParse(process.env);
