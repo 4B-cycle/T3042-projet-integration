@@ -14,11 +14,13 @@ export async function buildApp() {
   // traduit 404 en "Élément introuvable" et tout code >= 400 en "demande refusée".
   app.setErrorHandler((erreur, req, reply) => {
     if (erreur instanceof ZodError) {
-      return reply.code(400).send({ error: "Données invalides", details: erreur.issues });
+      return reply
+        .code(400)
+        .send({ error: "Données invalides", details: erreur.issues });
     }
     const statut = (erreur as { statusCode?: number }).statusCode;
     if (statut && statut < 500) {
-      return reply.code(statut).send({ error: erreur.message });
+      return reply.code(statut).send({ error: (erreur as any).message });
     }
     req.log.error(erreur); // le détail reste dans les logs, pas dans la réponse
     return reply.code(500).send({ error: "Erreur interne" });

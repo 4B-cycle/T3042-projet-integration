@@ -1,8 +1,13 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { prisma } from "../db.js";
 import { assurerEtudiant, trouverEtudiant } from "../lib/etudiants.js";
-import { coursQuery, difficulteBody, exercicesQuery, idParams } from "../lib/schemas.js";
+import {
+  coursQuery,
+  difficulteBody,
+  exercicesQuery,
+  idParams,
+} from "../lib/schemas.js";
 
 export async function tutoratRoutes(app: FastifyInstance) {
   // Route 8 : GET /etudiants/{id}/exercices?matiere=&niveau=
@@ -28,7 +33,10 @@ export async function tutoratRoutes(app: FastifyInstance) {
       where: { etudiantId: etudiant.id },
       orderBy: { creeLe: "asc" },
     });
-    return difficultes.map((d) => ({ matiere: d.matiere, notion: d.notion }));
+    return difficultes.map((d: any) => ({
+      matiere: d.matiere,
+      notion: d.notion,
+    }));
   });
 
   // Route 10 : POST /etudiants/{id}/difficultes
@@ -39,12 +47,22 @@ export async function tutoratRoutes(app: FastifyInstance) {
     // upsert : si la même difficulté est déjà enregistrée, on ne crée pas de doublon.
     const difficulte = await prisma.difficulte.upsert({
       where: {
-        etudiantId_matiere_notion: { etudiantId: etudiant.id, matiere: corps.matiere, notion: corps.notion },
+        etudiantId_matiere_notion: {
+          etudiantId: etudiant.id,
+          matiere: corps.matiere,
+          notion: corps.notion,
+        },
       },
       update: {},
-      create: { etudiantId: etudiant.id, matiere: corps.matiere, notion: corps.notion },
+      create: {
+        etudiantId: etudiant.id,
+        matiere: corps.matiere,
+        notion: corps.notion,
+      },
     });
-    return reply.code(201).send({ matiere: difficulte.matiere, notion: difficulte.notion });
+    return reply
+      .code(201)
+      .send({ matiere: difficulte.matiere, notion: difficulte.notion });
   });
 
   // Route 11 : GET /cours?recherche=&matiere=
