@@ -25,8 +25,8 @@ from micro import ouvrir_micro, fermer_micro, amplifier
 from tuteur import transcrire, talk_to_tuteur, nouvelle_conversation
 
 # --- Réglages -----------------------------------------------------------------
-GPIO_PARLER = 11          # GPIO 11 = broche physique 23
-GPIO_MARCHE = 13          # GPIO 13 = broche physique 33
+GPIO_PARLER = 17          # GPIO 11 = broche physique 23
+GPIO_MARCHE = 27          # GPIO 13 = broche physique 33
 GPIO_LED = (22, 23, 24)   # broches 15, 16, 18 (rouge, vert, bleu)
 FICHIER = "/tmp/question.wav"
 DUREE_MAX = 30            # secondes : le micro s'arrête tout seul après ce temps

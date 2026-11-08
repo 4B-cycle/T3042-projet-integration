@@ -31,8 +31,8 @@ from haut_parleur import parler
 from tuteur_public import talk_to_tuteur, nouvelle_conversation   # <- la seule vraie différence
 
 # --- Réglages -----------------------------------------------------------------
-GPIO_PARLER = 11          # GPIO 11 = broche physique 23
-GPIO_MARCHE = 13          # GPIO 13 = broche physique 33
+GPIO_PARLER = 17          # GPIO 11 = broche physique 23
+GPIO_MARCHE = 27          # GPIO 13 = broche physique 33
 GPIO_LED = (22, 23, 24)   # broches 15, 16, 18 (rouge, vert, bleu)
 FICHIER_QUESTIONS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "questions.json")
 PAUSE_LIGNE = 1.5         # secondes entre deux lignes quand la réponse défile
