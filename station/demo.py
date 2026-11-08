@@ -1,8 +1,8 @@
 """
 Démo de la station : 2 boutons, LED RGB, écran LCD 20x4, micro, enceinte Bluetooth.
 
-  Bouton MARCHE (GPIO 27) : allume / éteint la station
-  Bouton PARLER (GPIO 17) : 1er appui = le micro écoute, 2e appui = on envoie la question
+  Bouton MARCHE (GPIO 13) : allume / éteint la station
+  Bouton PARLER (GPIO 11) : 1er appui = le micro écoute, 2e appui = on envoie la question
 
   Couleurs de la LED :
     ROUGE  = station éteinte (on ne peut rien faire)
@@ -25,8 +25,8 @@ from micro import ouvrir_micro, fermer_micro, amplifier
 from tuteur import transcrire, talk_to_tuteur, nouvelle_conversation
 
 # --- Réglages -----------------------------------------------------------------
-GPIO_PARLER = 17          # broche 11
-GPIO_MARCHE = 27          # broche 13
+GPIO_PARLER = 11          # GPIO 11 = broche physique 23
+GPIO_MARCHE = 13          # GPIO 13 = broche physique 33
 GPIO_LED = (22, 23, 24)   # broches 15, 16, 18 (rouge, vert, bleu)
 FICHIER = "/tmp/question.wav"
 DUREE_MAX = 30            # secondes : le micro s'arrête tout seul après ce temps

@@ -4,8 +4,8 @@ Démo de la station SANS MICRO : 2 boutons, LED RGB, écran LCD 20x4, enceinte B
 Même démo que demo.py, mais la question n'est pas dite au micro : elle est tirée au hasard
 dans le fichier questions.json, puis envoyée en TEXTE au tuteur.
 
-  Bouton MARCHE (GPIO 27) : allume / éteint la station
-  Bouton PARLER (GPIO 17) : tire une question au hasard et l'envoie au tuteur
+  Bouton MARCHE (GPIO 13) : allume / éteint la station
+  Bouton PARLER (GPIO 11) : tire une question au hasard et l'envoie au tuteur
 
   Couleurs de la LED :
     ROUGE  = station éteinte (on ne peut rien faire)
@@ -30,8 +30,8 @@ from haut_parleur import parler
 from tuteur import talk_to_tuteur, nouvelle_conversation
 
 # --- Réglages -----------------------------------------------------------------
-GPIO_PARLER = 17          # broche 11
-GPIO_MARCHE = 27          # broche 13
+GPIO_PARLER = 11          # GPIO 11 = broche physique 23
+GPIO_MARCHE = 13          # GPIO 13 = broche physique 33
 GPIO_LED = (22, 23, 24)   # broches 15, 16, 18 (rouge, vert, bleu)
 FICHIER_QUESTIONS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "questions.json")
 PAUSE_LIGNE = 1.5         # secondes entre deux lignes quand la réponse défile

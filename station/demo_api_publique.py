@@ -5,8 +5,8 @@ Identique à demo_sans_micro.py (vrais boutons, vraie LED, vrai écran, vraie en
 mais la question est envoyée à une IA publique (Mistral par défaut, voir tuteur_public.py)
 au lieu de notre agent Open WebUI. Sert à tester quand on n'a pas accès à Open WebUI.
 
-  Bouton MARCHE (GPIO 27) : allume / éteint la station
-  Bouton PARLER (GPIO 17) : tire une question au hasard et l'envoie au tuteur
+  Bouton MARCHE (GPIO 13) : allume / éteint la station
+  Bouton PARLER (GPIO 11) : tire une question au hasard et l'envoie au tuteur
 
   Couleurs de la LED :
     ROUGE  = station éteinte (on ne peut rien faire)
@@ -31,8 +31,8 @@ from haut_parleur import parler
 from tuteur_public import talk_to_tuteur, nouvelle_conversation   # <- la seule vraie différence
 
 # --- Réglages -----------------------------------------------------------------
-GPIO_PARLER = 17          # broche 11
-GPIO_MARCHE = 27          # broche 13
+GPIO_PARLER = 11          # GPIO 11 = broche physique 23
+GPIO_MARCHE = 13          # GPIO 13 = broche physique 33
 GPIO_LED = (22, 23, 24)   # broches 15, 16, 18 (rouge, vert, bleu)
 FICHIER_QUESTIONS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "questions.json")
 PAUSE_LIGNE = 1.5         # secondes entre deux lignes quand la réponse défile
