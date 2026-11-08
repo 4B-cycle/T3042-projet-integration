@@ -1,0 +1,14 @@
+{
+  "questions": [
+    "C'est quoi une diode Zener ?",
+    "À quoi sert une résistance dans un circuit ?",
+    "Quelle est la différence entre un semi-conducteur de type N et de type P ?",
+    "Comment fonctionne une jonction PN ?",
+    "Qu'est-ce que la tension de seuil d'une diode ?",
+    "À quoi sert un transistor bipolaire ?",
+    "Quelle est la différence entre un transistor NPN et un transistor PNP ?",
+    "Qu'est-ce qu'un amplificateur opérationnel ?",
+    "Comment fonctionne un pont redresseur à diodes ?",
+    "À quoi sert un condensateur de filtrage après un redresseur ?"
+  ]
+}
