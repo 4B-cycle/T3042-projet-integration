@@ -37,7 +37,9 @@ def transcrire(chemin_wav):
         with open(chemin_wav, "rb") as f:
             fichiers = {"file": ("question.wav", f, "audio/wav")}
             reponse = requests.post(URL + "/api/v1/audio/transcriptions",
-                                    headers=entetes, files=fichiers, timeout=120)
+                                    headers=entetes, files=fichiers,
+                                    data={"language": "fr"},   # on parle français
+                                    timeout=120)
     except requests.exceptions.RequestException as erreur:
         return "Serveur injoignable : " + str(erreur), 0
 

@@ -5,13 +5,14 @@ Déroulement d'un tour :
   1. l'utilisateur appuie sur Entrée, parle, puis appuie de nouveau sur Entrée  (micro.py)
   2. l'enregistrement est envoyé à Open WebUI qui le transforme en texte         (tuteur.py)
   3. le texte est envoyé au tuteur, qui répond                                   (tuteur.py)
-  4. la réponse s'affiche
+  4. la réponse s'affiche et est lue sur l'enceinte                             (haut_parleur.py)
 
-Plus tard : bouton à la place d'Entrée, LED, voix sur l'enceinte, écran LCD.
+Plus tard : bouton à la place d'Entrée, LED, écran LCD.
 
 Lancement (depuis le dossier station) :  python3 station.py
 """
-from micro import ouvrir_micro, fermer_micro
+from micro import ouvrir_micro, fermer_micro, amplifier
+from haut_parleur import parler
 from tuteur import transcrire, talk_to_tuteur
 
 FICHIER = "/tmp/question.wav"
@@ -23,7 +24,7 @@ def ecouter():
     processus = ouvrir_micro(FICHIER)
     input("J'écoute... Appuie sur Entrée quand tu as fini.")
     fermer_micro(processus)
-    return FICHIER
+    return amplifier(FICHIER)
 
 
 def un_tour():
@@ -37,6 +38,7 @@ def un_tour():
         return
     if not question.strip():
         print("Je n'ai rien entendu, recommence.")
+        parler("Je n'ai rien entendu, recommence.")
         return
     print("Tu as dit :", question)
 
@@ -46,6 +48,7 @@ def un_tour():
         print("Problème avec le tuteur (", code, ") :", reponse)
         return
     print("\nTuteur :", reponse)
+    parler(reponse)
 
 
 def main():
