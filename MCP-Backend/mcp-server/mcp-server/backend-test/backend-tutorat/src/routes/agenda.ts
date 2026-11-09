@@ -10,11 +10,15 @@ import { idParams } from "../lib/schemas.js";
 const agendaBody = z.object({
   url_ical: z
     .string()
-    .url()
     .max(2000)
     .refine((texte) => {
-      const url = new URL(texte);
-      return url.protocol === "https:" && url.hostname === config.AGENDA_HOTE_AUTORISE;
+      try {
+        const url = new URL(texte);
+        return url.protocol === "https:" && url.hostname === config.AGENDA_HOTE_AUTORISE;
+      } catch {
+        // Si ce n'est pas une URL valide, new URL() jette une erreur qu'on attrape ici
+        return false;
+      }
     }, `L'URL doit être en https://${config.AGENDA_HOTE_AUTORISE}/...`),
   sujet_ntfy: z.string().min(8).max(100).regex(/^[A-Za-z0-9_-]+$/),
 });
