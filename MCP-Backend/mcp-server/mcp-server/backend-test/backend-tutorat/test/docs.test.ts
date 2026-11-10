@@ -4,8 +4,12 @@ import { openapiDocument } from "../src/docs/openapi.js";
 
 describe("documentation Swagger", () => {
   let app: Awaited<ReturnType<typeof buildApp>>;
-  beforeAll(async () => { app = await buildApp(); });
-  afterAll(async () => { await app.close(); });
+  beforeAll(async () => {
+    app = await buildApp();
+  });
+  afterAll(async () => {
+    await app.close();
+  });
 
   it("sert le document OpenAPI sans jeton", async () => {
     const reponse = await app.inject({ method: "GET", url: "/docs/json" });
@@ -20,6 +24,6 @@ describe("documentation Swagger", () => {
       for (const m of methodes) if (chemin?.[m]) total++;
     }
     // Si tu ajoutes une route, mets à jour openapi.ts ET ce nombre.
-    expect(total).toBe(12);
+    expect(total).toBe(14);
   });
 });
