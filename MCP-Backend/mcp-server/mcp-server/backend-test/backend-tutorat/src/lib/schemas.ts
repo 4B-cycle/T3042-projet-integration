@@ -8,7 +8,10 @@ import { parseDateHeure } from "./dates.js";
 export const dateHeureSchema = z.string().transform((texte, ctx) => {
   const date = parseDateHeure(texte);
   if (!date) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Format attendu : AAAA-MM-JJ HH:MM" });
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Format attendu : AAAA-MM-JJ HH:MM",
+    });
     return z.NEVER;
   }
   return date;
@@ -16,7 +19,11 @@ export const dateHeureSchema = z.string().transform((texte, ctx) => {
 
 // {id} dans l'URL = identifiant Open WebUI. On limite les caractères autorisés.
 export const idParams = z.object({
-  id: z.string().min(1).max(100).regex(/^[A-Za-z0-9_-]+$/),
+  id: z
+    .string()
+    .min(1)
+    .max(100)
+    .regex(/^[A-Za-z0-9_-]+$/),
 });
 
 export const rappelParams = idParams.extend({
@@ -49,4 +56,8 @@ export const difficulteBody = z.object({
 export const coursQuery = z.object({
   recherche: z.string().trim().max(200).optional(),
   matiere: z.string().trim().max(100).optional(),
+});
+
+export const examenParams = z.object({
+  idExamen: z.coerce.number().int().positive(),
 });

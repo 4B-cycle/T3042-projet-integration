@@ -71,8 +71,25 @@ model Exercice {
   niveau  Int // 1 (facile) à 3 (difficile)
   enonce  String
 
+  // Nouveaux champs pour la relation Examen
+  examenId  Int?    @map("examen_id")
+  examen    Examen? @relation(fields: [examenId], references: [id], onDelete: Cascade)
+
   @@index([matiere, niveau])
   @@map("exercice")
+}
+
+model Examen {
+  id          Int        @id @default(autoincrement())
+  titre       String
+  matiere     String
+  // Date et heure de l'examen (sans fuseau, comme pour Rappel)
+  datePrevue  DateTime?  @map("date_prevue") @db.Timestamp(0)
+  creeLe      DateTime   @default(now()) @map("cree_le")
+  
+  exercices   Exercice[]
+
+  @@map("examen")
 }
 
 model Difficulte {
