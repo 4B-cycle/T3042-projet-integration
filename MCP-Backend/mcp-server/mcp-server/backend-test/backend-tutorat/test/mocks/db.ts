@@ -16,6 +16,7 @@ export const prismaMock = {
   exercice: { findMany: vi.fn() },
   difficulte: { findMany: vi.fn(), upsert: vi.fn() },
   cours: { findMany: vi.fn() },
+  examen: { findMany: vi.fn(), findUnique: vi.fn() },
 };
 
 /** Remet tous les espions à zéro (à appeler dans beforeEach). */
