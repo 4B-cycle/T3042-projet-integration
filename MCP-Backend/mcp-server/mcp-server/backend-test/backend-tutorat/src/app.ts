@@ -8,6 +8,7 @@ import { verifierToken } from "./plugins/auth.js";
 import { agendaRoutes } from "./routes/agenda.js";
 import { rappelsRoutes } from "./routes/rappels.js";
 import { tutoratRoutes } from "./routes/tutorat.js";
+import { examensRoutes } from "./routes/examens.js";
 
 /** Construit l'application (séparée de server.ts pour pouvoir la tester sans ouvrir de port). */
 export async function buildApp() {
@@ -17,11 +18,13 @@ export async function buildApp() {
   // traduit 404 en "Élément introuvable" et tout code >= 400 en "demande refusée".
   app.setErrorHandler((erreur, req, reply) => {
     if (erreur instanceof ZodError) {
-      return reply.code(400).send({ error: "Données invalides", details: erreur.issues });
+      return reply
+        .code(400)
+        .send({ error: "Données invalides", details: erreur.issues });
     }
     const statut = (erreur as { statusCode?: number }).statusCode;
     if (statut && statut < 500) {
-      return reply.code(statut).send({ error: erreur.message });
+      return reply.code(statut).send({ error: (erreur as Error).message });
     }
     req.log.error(erreur); // le détail reste dans les logs, pas dans la réponse
     return reply.code(500).send({ error: "Erreur interne" });
@@ -32,7 +35,10 @@ export async function buildApp() {
   // c'est pourquoi on peut la désactiver avec ENABLE_DOCS=false en production.
   // Mode "static" : on fournit notre document écrit à la main (src/docs/openapi.ts).
   if (config.ENABLE_DOCS) {
-    await app.register(swagger, { mode: "static", specification: { document: openapiDocument } });
+    await app.register(swagger, {
+      mode: "static",
+      specification: { document: openapiDocument },
+    });
     await app.register(swaggerUi, { routePrefix: "/docs" });
   }
 
@@ -45,6 +51,7 @@ export async function buildApp() {
     await protege.register(rappelsRoutes);
     await protege.register(agendaRoutes);
     await protege.register(tutoratRoutes);
+    await protege.register(examensRoutes);
   });
 
   return app;
