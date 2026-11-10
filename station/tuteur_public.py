@@ -18,6 +18,7 @@ l'autre en changeant une seule ligne d'import.
 """
 from dotenv import load_dotenv
 import os
+import time
 import requests
 
 load_dotenv(os.path.expanduser("~/station/station.env"))
@@ -48,12 +49,20 @@ def talk_to_tuteur(question):
     donnees = {"model": MODELE, "messages": historique}
     entetes = {"Authorization": "Bearer " + CLE}
 
-    try:
-        reponse = requests.post(URL + "/chat/completions",
-                                json=donnees, headers=entetes, timeout=60)
-    except requests.exceptions.RequestException as erreur:
-        historique.pop()
-        return "Serveur injoignable : " + str(erreur), 0
+    essai = 1
+    while True:
+        try:
+            reponse = requests.post(URL + "/chat/completions",
+                                    json=donnees, headers=entetes, timeout=60)
+        except requests.exceptions.RequestException as erreur:
+            historique.pop()
+            return "Serveur injoignable : " + str(erreur), 0
+        # 429 = « trop de demandes » : l'offre gratuite limite le rythme -> on attend et on réessaie
+        if reponse.status_code != 429 or essai == 3:
+            break
+        print("Limite gratuite atteinte (429), nouvel essai dans", essai * 3, "s...")
+        time.sleep(essai * 3)
+        essai += 1
 
     if reponse.status_code == 200:
         texte = reponse.json()["choices"][0]["message"]["content"]

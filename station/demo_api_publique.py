@@ -5,15 +5,17 @@ Identique à demo_sans_micro.py (vrais boutons, vraie LED, vrai écran, vraie en
 mais la question est envoyée à une IA publique (Mistral par défaut, voir tuteur_public.py)
 au lieu de notre agent Open WebUI. Sert à tester quand on n'a pas accès à Open WebUI.
 
-  Bouton MARCHE (GPIO 13) : allume / éteint la station
-  Bouton PARLER (GPIO 11) : tire une question au hasard et l'envoie au tuteur
+  Bouton MARCHE (GPIO 27) : allume / éteint la station
+  Bouton PARLER (GPIO 17) : 1er appui = « le micro écoute » (simulé)
+                            2e appui = une question est tirée au hasard et envoyée au tuteur
 
   Couleurs de la LED :
-    ROUGE  = station éteinte (on ne peut rien faire)
-    VERT   = station allumée, prête
-    BLEU   = une question est choisie (et lue à voix haute)
-    JAUNE  = la station réfléchit (le tuteur prépare sa réponse)
-    VIOLET = un problème (réseau, serveur...)
+    ROUGE            = station éteinte (on ne peut rien faire)
+    VERT             = station allumée, prête
+    BLEU             = le micro est ouvert (un bip au début, deux bips à la fin)
+    VIOLET           = la station réfléchit (le tuteur prépare sa réponse)
+    ORANGE           = le haut-parleur lit la réponse
+    ROUGE CLIGNOTANT = un problème (réseau, serveur...)
 
 Lancement (depuis le dossier station) :  python3 demo_api_publique.py
 """
@@ -24,27 +26,29 @@ import random
 import threading
 import time
 
-from gpiozero import Button, RGBLED
+from gpiozero import Button, Buzzer, RGBLED
 
 import lcd
 from haut_parleur import parler
 from tuteur_public import talk_to_tuteur, nouvelle_conversation   # <- la seule vraie différence
 
 # --- Réglages -----------------------------------------------------------------
-GPIO_PARLER = 17          # GPIO 11 = broche physique 23
-GPIO_MARCHE = 27          # GPIO 13 = broche physique 33
+GPIO_PARLER = 17          # broche physique 11
+GPIO_MARCHE = 27          # broche physique 13
 GPIO_LED = (22, 23, 24)   # broches 15, 16, 18 (rouge, vert, bleu)
+GPIO_BUZZER = 5           # broche 29
 FICHIER_QUESTIONS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "questions.json")
 PAUSE_LIGNE = 1.5         # secondes entre deux lignes quand la réponse défile
 
 ROUGE = (1, 0, 0)
 VERT = (0, 1, 0)
 BLEU = (0, 0, 1)
-JAUNE = (1, 0.4, 0)
-VIOLET = (1, 0, 1)
+VIOLET = (0.6, 0, 1)
+ORANGE = (1, 0.25, 0)
 
 # --- Matériel -----------------------------------------------------------------
 led = RGBLED(*GPIO_LED)                      # ajoute active_high=False si ta LED est à anode commune
+buzzer = Buzzer(GPIO_BUZZER)
 bouton_parler = Button(GPIO_PARLER, bounce_time=0.05)
 bouton_marche = Button(GPIO_MARCHE, bounce_time=0.05)
 
@@ -62,11 +66,17 @@ with open(FICHIER_QUESTIONS, encoding="utf-8") as f:
 # --- État de la station ----------------------------------------------------------
 etat = {
     "allumee": False,     # la station est-elle allumée ?
+    "ecoute": False,      # le micro « écoute »-t-il ? (simulé)
     "derniere": None,     # la dernière question posée (pour ne pas poser deux fois la même de suite)
 }
 
 
 # --- Les écrans de la station ------------------------------------------------------
+def bip(nombre=1):
+    """Fait biper le buzzer : 1 bip = le micro s'ouvre, 2 bips = le micro se ferme."""
+    buzzer.beep(on_time=0.12, off_time=0.1, n=nombre, background=False)
+
+
 def ecran_pret():
     led.color = VERT
     lcd.afficher("Station prete !", "", "Appuie sur PARLER", "pour une question")
@@ -82,6 +92,7 @@ def allumer():
 
 def eteindre():
     etat["allumee"] = False
+    etat["ecoute"] = False
     led.color = ROUGE
     lcd.afficher("Station eteinte", "", "Appuie sur MARCHE", "pour l'allumer")
     parler("À bientôt.")
@@ -96,22 +107,31 @@ def choisir_question():
     return question
 
 
-def poser_question():
-    """Remplace l'écoute au micro : on choisit une question, on l'affiche et on la lit."""
-    question = choisir_question()
+def commencer_ecoute():
+    """1er appui : comme la vraie démo, sauf que le micro n'est pas ouvert."""
+    etat["ecoute"] = True
     led.color = BLEU
-    lignes = lcd.decouper(question)
-    lcd.afficher("Question :", *lignes[:3])
+    lcd.afficher("Je t'ecoute...", "Parle maintenant", "", "PARLER = j'ai fini")
+    bip(1)                               # un bip : le micro est ouvert
+    vider_evenements()
+
+
+def finir_ecoute():
+    """2e appui : à la place de ce que l'étudiant a dit, on tire une question au hasard."""
+    etat["ecoute"] = False
+    bip(2)                               # deux bips : le micro est fermé
+    question = choisir_question()
     print("Question :", question)
-    parler(question)                     # comme si l'étudiant la disait à voix haute
+    lcd.afficher("Tu as dit :", *lcd.decouper(question)[:3])
+    time.sleep(2)                        # laisser le temps de lire la question
     traiter_question(question)
     vider_evenements()   # on ignore les appuis faits pendant que la station réfléchissait
 
 
 def probleme(message):
-    """Affiche un problème en violet, le dit, puis revient à l'écran « prêt »."""
+    """Affiche un problème (LED rouge clignotante), le dit, puis revient à l'écran « prêt »."""
     print("Problème :", message)
-    led.color = VIOLET
+    led.blink(on_time=0.3, off_time=0.3, on_color=ROUGE, background=True)   # rouge clignotant
     lcd.afficher("Oups...", message[:20], "", "Reessaie dans un instant")
     parler("Désolé, il y a un problème. Réessaie dans un instant.")
     time.sleep(2)
@@ -120,10 +140,11 @@ def probleme(message):
 
 # --- Le cœur : question -> réponse ------------------------------------------------------
 def traiter_question(question):
-    led.color = JAUNE
+    led.color = VIOLET
     lcd.afficher("Je reflechis...", *lcd.decouper(question)[:3])
     reponse, code = talk_to_tuteur(question)
     if code != 200:
+        print("Détail de l'erreur (code", code, ") :", reponse)
         probleme("API injoignable")
         return
     print("Tuteur :", reponse)
@@ -133,7 +154,7 @@ def traiter_question(question):
 
 def repondre(texte):
     """Lit la réponse sur l'enceinte ET la fait défiler sur l'écran, en même temps."""
-    led.color = VERT
+    led.color = ORANGE
     voix = threading.Thread(target=parler, args=(texte,))   # la voix tourne « à côté »
     voix.start()
 
@@ -175,7 +196,10 @@ def main():
                 allumer()
 
         elif evenement == "parler" and etat["allumee"]:
-            poser_question()
+            if not etat["ecoute"]:
+                commencer_ecoute()
+            else:
+                finir_ecoute()
 
 
 if __name__ == "__main__":
@@ -185,4 +209,5 @@ if __name__ == "__main__":
         print("\nArrêt de la démo.")
     finally:
         led.off()
+        buzzer.off()
         lcd.afficher("Station arretee")

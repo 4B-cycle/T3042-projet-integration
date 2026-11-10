@@ -1,15 +1,16 @@
 """
 Démo de la station : 2 boutons, LED RGB, écran LCD 20x4, micro, enceinte Bluetooth.
 
-  Bouton MARCHE (GPIO 13) : allume / éteint la station
-  Bouton PARLER (GPIO 11) : 1er appui = le micro écoute, 2e appui = on envoie la question
+  Bouton MARCHE (GPIO 27) : allume / éteint la station
+  Bouton PARLER (GPIO 17) : 1er appui = le micro écoute, 2e appui = on envoie la question
 
   Couleurs de la LED :
-    ROUGE  = station éteinte (on ne peut rien faire)
-    VERT   = station allumée, prête
-    BLEU   = le micro enregistre
-    JAUNE  = la station réfléchit (transcription + tuteur)
-    VIOLET = un problème (réseau, serveur...)
+    ROUGE            = station éteinte (on ne peut rien faire)
+    VERT             = station allumée, prête
+    BLEU             = le micro est ouvert (un bip au début, deux bips à la fin)
+    VIOLET           = la station réfléchit (le tuteur prépare sa réponse)
+    ORANGE           = le haut-parleur lit la réponse
+    ROUGE CLIGNOTANT = un problème (réseau, serveur...)
 
 Lancement (depuis le dossier station) :  python3 demo.py
 """
@@ -17,7 +18,7 @@ import queue
 import threading
 import time
 
-from gpiozero import Button, RGBLED
+from gpiozero import Button, Buzzer, RGBLED
 
 import lcd
 from haut_parleur import parler
@@ -25,9 +26,10 @@ from micro import ouvrir_micro, fermer_micro, amplifier
 from tuteur import transcrire, talk_to_tuteur, nouvelle_conversation
 
 # --- Réglages -----------------------------------------------------------------
-GPIO_PARLER = 17          # GPIO 11 = broche physique 23
-GPIO_MARCHE = 27          # GPIO 13 = broche physique 33
+GPIO_PARLER = 17          # broche physique 11
+GPIO_MARCHE = 27          # broche physique 13
 GPIO_LED = (22, 23, 24)   # broches 15, 16, 18 (rouge, vert, bleu)
+GPIO_BUZZER = 5           # broche 29
 FICHIER = "/tmp/question.wav"
 DUREE_MAX = 30            # secondes : le micro s'arrête tout seul après ce temps
 PAUSE_LIGNE = 1.5         # secondes entre deux lignes quand la réponse défile
@@ -35,11 +37,12 @@ PAUSE_LIGNE = 1.5         # secondes entre deux lignes quand la réponse défile
 ROUGE = (1, 0, 0)
 VERT = (0, 1, 0)
 BLEU = (0, 0, 1)
-JAUNE = (1, 0.4, 0)
-VIOLET = (1, 0, 1)
+VIOLET = (0.6, 0, 1)
+ORANGE = (1, 0.25, 0)
 
 # --- Matériel -----------------------------------------------------------------
 led = RGBLED(*GPIO_LED)                      # ajoute active_high=False si ta LED est à anode commune
+buzzer = Buzzer(GPIO_BUZZER)
 bouton_parler = Button(GPIO_PARLER, bounce_time=0.05)
 bouton_marche = Button(GPIO_MARCHE, bounce_time=0.05)
 
@@ -58,6 +61,11 @@ etat = {
 
 
 # --- Les écrans de la station ------------------------------------------------------
+def bip(nombre=1):
+    """Fait biper le buzzer : 1 bip = le micro s'ouvre, 2 bips = le micro se ferme."""
+    buzzer.beep(on_time=0.12, off_time=0.1, n=nombre, background=False)
+
+
 def ecran_pret():
     led.color = VERT
     lcd.afficher("Station prete !", "", "Appuie sur PARLER", "pour poser ta question")
@@ -83,23 +91,25 @@ def eteindre():
 
 
 def commencer_ecoute():
-    etat["micro"] = ouvrir_micro(FICHIER)
-    etat["debut"] = time.time()
     led.color = BLEU
     lcd.afficher("Je t'ecoute...", "Parle maintenant", "", "PARLER = j'ai fini")
+    bip(1)                               # un bip : le micro est ouvert
+    etat["micro"] = ouvrir_micro(FICHIER)
+    etat["debut"] = time.time()
 
 
 def finir_ecoute():
     fermer_micro(etat["micro"])
     etat["micro"] = None
+    bip(2)                               # deux bips : le micro est fermé
     traiter_question()
     vider_evenements()   # on ignore les appuis faits pendant que la station réfléchissait
 
 
 def probleme(message):
-    """Affiche un problème en violet, le dit, puis revient à l'écran « prêt »."""
+    """Affiche un problème (LED rouge clignotante), le dit, puis revient à l'écran « prêt »."""
     print("Problème :", message)
-    led.color = VIOLET
+    led.blink(on_time=0.3, off_time=0.3, on_color=ROUGE, background=True)   # rouge clignotant
     lcd.afficher("Oups...", message[:20], "", "Reessaie dans un instant")
     parler("Désolé, il y a un problème. Réessaie dans un instant.")
     time.sleep(2)
@@ -108,7 +118,7 @@ def probleme(message):
 
 # --- Le cœur : question -> réponse ------------------------------------------------------
 def traiter_question():
-    led.color = JAUNE
+    led.color = VIOLET
     lcd.afficher("Je reflechis...", "", "Transcription", "de ta question")
 
     question, code = transcrire(amplifier(FICHIER))
@@ -126,6 +136,7 @@ def traiter_question():
     lcd.afficher("Ta question :", *lignes[:3])
     reponse, code = talk_to_tuteur(question)
     if code != 200:
+        print("Détail de l'erreur (code", code, ") :", reponse)
         probleme("Tuteur injoignable")
         return
     print("Tuteur :", reponse)
@@ -135,7 +146,7 @@ def traiter_question():
 
 def repondre(texte):
     """Lit la réponse sur l'enceinte ET la fait défiler sur l'écran, en même temps."""
-    led.color = VERT
+    led.color = ORANGE
     voix = threading.Thread(target=parler, args=(texte,))   # la voix tourne « à côté »
     voix.start()
 
@@ -196,4 +207,5 @@ if __name__ == "__main__":
         if etat["micro"] is not None:
             fermer_micro(etat["micro"])
         led.off()
+        buzzer.off()
         lcd.afficher("Station arretee")
