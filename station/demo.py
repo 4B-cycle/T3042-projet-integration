@@ -15,7 +15,6 @@ Démo de la station : 2 boutons, LED RGB, écran LCD 20x4, micro, enceinte Bluet
 Lancement (depuis le dossier station) :  python3 demo.py
 """
 import queue
-import threading
 import time
 
 from gpiozero import Button, Buzzer, RGBLED
@@ -30,9 +29,11 @@ GPIO_PARLER = 17          # broche physique 11
 GPIO_MARCHE = 27          # broche physique 13
 GPIO_LED = (22, 23, 24)   # broches 15, 16, 18 (rouge, vert, bleu)
 GPIO_BUZZER = 5           # broche 29
+BUZZER_ACTIF_HAUT = True  # mets False si ton buzzer sonne quand GPIO 5 est à 0 (voir test_buzzer.py)
+DUREE_BIP = 0.25          # secondes : durée d'un bip
+NOM_AGENT = "Tuteur Electronique"   # affiché en haut de l'écran d'accueil (20 caractères max)
 FICHIER = "/tmp/question.wav"
 DUREE_MAX = 30            # secondes : le micro s'arrête tout seul après ce temps
-PAUSE_LIGNE = 1.5         # secondes entre deux lignes quand la réponse défile
 
 ROUGE = (1, 0, 0)
 VERT = (0, 1, 0)
@@ -42,7 +43,7 @@ ORANGE = (1, 0.25, 0)
 
 # --- Matériel -----------------------------------------------------------------
 led = RGBLED(*GPIO_LED)                      # ajoute active_high=False si ta LED est à anode commune
-buzzer = Buzzer(GPIO_BUZZER)
+buzzer = Buzzer(GPIO_BUZZER, active_high=BUZZER_ACTIF_HAUT)
 bouton_parler = Button(GPIO_PARLER, bounce_time=0.05)
 bouton_marche = Button(GPIO_MARCHE, bounce_time=0.05)
 
@@ -57,22 +58,43 @@ etat = {
     "allumee": False,     # la station est-elle allumée ?
     "micro": None,        # le processus arecord quand le micro enregistre, sinon None
     "debut": 0,           # l'heure à laquelle l'enregistrement a commencé
+    "accueil": False,     # l'écran d'accueil (avec l'horloge) est-il affiché ?
 }
+
+JOURS = ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"]
 
 
 # --- Les écrans de la station ------------------------------------------------------
 def bip(nombre=1):
     """Fait biper le buzzer : 1 bip = le micro s'ouvre, 2 bips = le micro se ferme."""
-    buzzer.beep(on_time=0.12, off_time=0.1, n=nombre, background=False)
+    buzzer.beep(on_time=DUREE_BIP, off_time=0.15, n=nombre, background=False)
+
+
+def date_heure():
+    """« mar 10/11   12:45:03 » : la date et l'heure sur 20 caractères."""
+    maintenant = time.localtime()
+    return JOURS[maintenant.tm_wday] + time.strftime(" %d/%m   %H:%M:%S", maintenant)
 
 
 def ecran_pret():
+    """L'écran d'accueil : nom de l'agent, date et heure, et ce qu'il faut faire."""
     led.color = VERT
-    lcd.afficher("Station prete !", "", "Appuie sur PARLER", "pour poser ta question")
+    lcd.afficher(NOM_AGENT, date_heure(), "", "PARLER = question")
+    etat["accueil"] = True
+
+
+def mettre_a_jour_ecran():
+    """Appelée deux fois par seconde par la boucle principale : fait vivre l'écran."""
+    if etat["micro"] is not None:                 # pendant l'écoute : un chronomètre
+        secondes = int(time.time() - etat["debut"])
+        lcd.ecrire("Temps : " + str(secondes) + " s / " + str(DUREE_MAX) + " s", 1)
+    elif etat["accueil"]:                         # à l'accueil : l'horloge
+        lcd.ecrire(date_heure(), 1)
 
 
 def allumer():
     etat["allumee"] = True
+    lcd.afficher(NOM_AGENT, "", "Demarrage...")
     nouvelle_conversation()
     ecran_pret()
     parler("La station est prête.")
@@ -84,6 +106,7 @@ def eteindre():
         fermer_micro(etat["micro"])
         etat["micro"] = None
     etat["allumee"] = False
+    etat["accueil"] = False
     led.color = ROUGE
     lcd.afficher("Station eteinte", "", "Appuie sur MARCHE", "pour l'allumer")
     parler("À bientôt.")
@@ -91,8 +114,9 @@ def eteindre():
 
 
 def commencer_ecoute():
+    etat["accueil"] = False
     led.color = BLEU
-    lcd.afficher("Je t'ecoute...", "Parle maintenant", "", "PARLER = j'ai fini")
+    lcd.afficher("Je t'ecoute...", "Temps : 0 s", "", "PARLER = j'ai fini")
     bip(1)                               # un bip : le micro est ouvert
     etat["micro"] = ouvrir_micro(FICHIER)
     etat["debut"] = time.time()
@@ -118,8 +142,9 @@ def probleme(message):
 
 # --- Le cœur : question -> réponse ------------------------------------------------------
 def traiter_question():
+    etat["accueil"] = False
     led.color = VIOLET
-    lcd.afficher("Je reflechis...", "", "Transcription", "de ta question")
+    lcd.afficher("Je reflechis...", "", "Je transcris", "ta question")
 
     question, code = transcrire(amplifier(FICHIER))
     if code != 200:
@@ -132,35 +157,24 @@ def traiter_question():
         return
     print("Question :", question)
 
+    # On montre ce que la station a COMPRIS : l'étudiant vérifie que la transcription est bonne
     lignes = lcd.decouper(question)
-    lcd.afficher("Ta question :", *lignes[:3])
+    lcd.afficher("Tu as dit :", *lignes[:3])
     reponse, code = talk_to_tuteur(question)
     if code != 200:
         print("Détail de l'erreur (code", code, ") :", reponse)
         probleme("Tuteur injoignable")
         return
     print("Tuteur :", reponse)
-    repondre(reponse)
+    repondre(reponse, lignes)
     ecran_pret()
 
 
-def repondre(texte):
-    """Lit la réponse sur l'enceinte ET la fait défiler sur l'écran, en même temps."""
+def repondre(texte, lignes_question):
+    """Lit la réponse sur l'enceinte. L'écran garde la question et indique que le tuteur parle."""
     led.color = ORANGE
-    voix = threading.Thread(target=parler, args=(texte,))   # la voix tourne « à côté »
-    voix.start()
-
-    lignes = lcd.decouper(texte)
-    premiere = 0                     # numéro de la ligne affichée tout en haut
-    derniere_possible = max(0, len(lignes) - lcd.LIGNES)
-    # on fait défiler tant que la voix parle OU qu'il reste du texte à montrer
-    while voix.is_alive() or premiere < derniere_possible:
-        lcd.afficher(*lignes[premiere:premiere + lcd.LIGNES])
-        time.sleep(PAUSE_LIGNE)
-        if premiere < derniere_possible:
-            premiere += 1
-    voix.join()
-    time.sleep(3)                    # laisser lire la fin
+    lcd.afficher("Le tuteur repond...", *lignes_question[:3])
+    parler(texte)
     vider_evenements()
 
 
@@ -172,7 +186,6 @@ def vider_evenements():
 # --- La boucle principale ---------------------------------------------------------------
 def main():
     lcd.initialiser()
-    lcd.afficher("Station tuteur", "Demarrage...")
     allumer()
 
     while True:
@@ -184,6 +197,8 @@ def main():
         # sécurité : on n'écoute pas indéfiniment
         if etat["micro"] is not None and time.time() - etat["debut"] > DUREE_MAX:
             evenement = "parler"
+
+        mettre_a_jour_ecran()
 
         if evenement == "marche":
             if etat["allumee"]:
