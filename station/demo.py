@@ -19,6 +19,7 @@ import time
 
 from gpiozero import Button, Buzzer, RGBLED
 
+import journal
 import lcd
 from haut_parleur import parler
 from micro import ouvrir_micro, fermer_micro, amplifier
@@ -95,6 +96,7 @@ def mettre_a_jour_ecran():
 def allumer():
     etat["allumee"] = True
     lcd.afficher(NOM_AGENT, "", "Demarrage...")
+    journal.etape("● Station allumée", journal.VERT)
     nouvelle_conversation()
     ecran_pret()
     parler("La station est prête.")
@@ -107,6 +109,8 @@ def eteindre():
         etat["micro"] = None
     etat["allumee"] = False
     etat["accueil"] = False
+    journal.etape("● Station éteinte", journal.ROUGE)
+    journal.separateur()
     led.color = ROUGE
     lcd.afficher("Station eteinte", "", "Appuie sur MARCHE", "pour l'allumer")
     parler("À bientôt.")
@@ -120,10 +124,13 @@ def commencer_ecoute():
     bip(1)                               # un bip : le micro est ouvert
     etat["micro"] = ouvrir_micro(FICHIER)
     etat["debut"] = time.time()
+    journal.etape("Micro ouvert : l'étudiant parle...", journal.BLEU)
 
 
 def finir_ecoute():
+    duree = int(time.time() - etat["debut"])
     fermer_micro(etat["micro"])
+    journal.etape("Micro fermé (" + str(duree) + " s)", journal.BLEU)
     etat["micro"] = None
     bip(2)                               # deux bips : le micro est fermé
     traiter_question()
@@ -132,7 +139,6 @@ def finir_ecoute():
 
 def probleme(message):
     """Affiche un problème (LED rouge clignotante), le dit, puis revient à l'écran « prêt »."""
-    print("Problème :", message)
     led.blink(on_time=0.3, off_time=0.3, on_color=ROUGE, background=True)   # rouge clignotant
     lcd.afficher("Oups...", message[:20], "", "Reessaie dans un instant")
     parler("Désolé, il y a un problème. Réessaie dans un instant.")
@@ -145,28 +151,35 @@ def traiter_question():
     etat["accueil"] = False
     led.color = VIOLET
     lcd.afficher("Je reflechis...", "", "Je transcris", "ta question")
+    journal.etape("Transcription...", journal.VIOLET)
 
     question, code = transcrire(amplifier(FICHIER))
     if code != 200:
+        journal.erreur("Transcription impossible (code " + str(code) + ")", question)
         probleme("Transcription")
         return
     if not question.strip():
+        journal.etape("Rien entendu", journal.JAUNE)
         lcd.afficher("Je n'ai rien entendu", "", "Reappuie sur PARLER", "et parle plus fort")
         parler("Je n'ai rien entendu. Recommence.")
         ecran_pret()
         return
-    print("Question :", question)
+    journal.etudiant(question)
 
     # On montre ce que la station a COMPRIS : l'étudiant vérifie que la transcription est bonne
     lignes = lcd.decouper(question)
     lcd.afficher("Tu as dit :", *lignes[:3])
+    journal.etape("Le tuteur réfléchit...", journal.VIOLET)
+    depart = time.time()
     reponse, code = talk_to_tuteur(question)
     if code != 200:
-        print("Détail de l'erreur (code", code, ") :", reponse)
+        journal.erreur("Tuteur injoignable (code " + str(code) + ")", reponse)
         probleme("Tuteur injoignable")
         return
-    print("Tuteur :", reponse)
+    journal.tuteur(reponse, time.time() - depart)
     repondre(reponse, lignes)
+    journal.etape("Réponse lue sur l'enceinte")
+    journal.separateur()
     ecran_pret()
 
 
@@ -185,6 +198,7 @@ def vider_evenements():
 
 # --- La boucle principale ---------------------------------------------------------------
 def main():
+    journal.titre("STATION TUTEUR - " + NOM_AGENT)
     lcd.initialiser()
     allumer()
 
@@ -217,7 +231,8 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print("\nArrêt de la démo.")
+        print()
+        journal.etape("Arrêt de la démo", journal.ROUGE)
     finally:
         if etat["micro"] is not None:
             fermer_micro(etat["micro"])
