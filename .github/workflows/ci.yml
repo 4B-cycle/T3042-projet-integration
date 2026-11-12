@@ -1,0 +1,36 @@
+name: Backend CI (Tests & Verification)
+
+'on':
+  push:
+    branches: [ "backend", "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test-and-lint:
+    name: Verification du code
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: MCP-Backend/mcp-server/mcp-server/backend-test/backend-tutorat
+
+    steps:
+      - name: Recupération du code
+        uses: actions/checkout@v4
+
+      - name: Configuration de Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: 'MCP-Backend/mcp-server/mcp-server/backend-test/backend-tutorat/package-lock.json'
+
+      - name: Installation des dépendances
+        run: npm ci
+
+      - name: Verification du style (Linter)
+        run: npm run lint --if-present
+
+      - name: Execution des tests unitaires
+        run: npm test

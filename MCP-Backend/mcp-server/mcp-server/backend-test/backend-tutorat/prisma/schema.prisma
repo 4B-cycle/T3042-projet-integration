@@ -1,0 +1,105 @@
+// Schéma de la base (EPIC 17). Version 1 : uniquement ce qu'utilisent les 9 outils du MCP.
+// Les tables des autres EPIC (résultats, examens, planning, notifications...) viendront ensuite.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Un étudiant = un utilisateur Open WebUI. Open WebUI envoie son propre identifiant
+// (en-tête x-openwebui-user-id, souvent un UUID) : on le garde dans openwebuiId.
+model Etudiant {
+  id          Int          @id @default(autoincrement())
+  openwebuiId String       @unique @map("openwebui_id")
+  creeLe      DateTime     @default(now()) @map("cree_le")
+  rappels     Rappel[]
+  agenda      Agenda?
+  difficultes Difficulte[]
+
+  @@map("etudiant")
+}
+
+model Rappel {
+  id            Int      @id @default(autoincrement())
+  etudiantId    Int      @map("etudiant_id")
+  titre         String
+  // Heure "murale" (ex. 14:00 à Bruxelles), SANS fuseau : c'est le format du contrat avec le MCP.
+  dateHeure     DateTime @map("date_heure") @db.Timestamp(0)
+  // Identifiant de l'événement Moodle ; null pour un rappel créé à la main.
+  uidExterne    String?  @map("uid_externe")
+  // Dernier palier de notification envoyé, en heures (72, 24, 2) ; null si aucun.
+  palierNotifie Int?     @map("palier_notifie")
+  etudiant      Etudiant @relation(fields: [etudiantId], references: [id], onDelete: Cascade)
+
+  // Empêche d'importer deux fois le même événement Moodle (null est autorisé plusieurs fois).
+  @@unique([etudiantId, uidExterne])
+  @@index([etudiantId, dateHeure])
+  @@map("rappel")
+}
+
+model Agenda {
+  id          Int      @id @default(autoincrement())
+  etudiantId  Int      @unique @map("etudiant_id")
+  // ATTENTION : cette URL contient un jeton personnel Moodle -> donnée sensible.
+  urlIcal     String   @map("url_ical")
+  // Sujet ntfy secret : qui le connaît peut lire les notifications.
+  sujetNtfy   String   @map("sujet_ntfy")
+  miseAJourLe DateTime @updatedAt @map("mise_a_jour_le")
+  etudiant    Etudiant @relation(fields: [etudiantId], references: [id], onDelete: Cascade)
+
+  @@map("agenda")
+}
+
+// Version simple : "matiere" est un texte. On pourra en faire une table plus tard.
+model Cours {
+  id      Int    @id @default(autoincrement())
+  titre   String
+  matiere String
+  resume  String
+
+  @@index([matiere])
+  @@map("cours")
+}
+
+model Exercice {
+  id      Int    @id @default(autoincrement())
+  matiere String
+  niveau  Int // 1 (facile) à 3 (difficile)
+  enonce  String
+
+  // Nouveaux champs pour la relation Examen
+  examenId  Int?    @map("examen_id")
+  examen    Examen? @relation(fields: [examenId], references: [id], onDelete: Cascade)
+
+  @@index([matiere, niveau])
+  @@map("exercice")
+}
+
+model Examen {
+  id          Int        @id @default(autoincrement())
+  titre       String
+  matiere     String
+  // Date et heure de l'examen (sans fuseau, comme pour Rappel)
+  datePrevue  DateTime?  @map("date_prevue") @db.Timestamp(0)
+  creeLe      DateTime   @default(now()) @map("cree_le")
+  
+  exercices   Exercice[]
+
+  @@map("examen")
+}
+
+model Difficulte {
+  id         Int      @id @default(autoincrement())
+  etudiantId Int      @map("etudiant_id")
+  matiere    String
+  notion     String
+  creeLe     DateTime @default(now()) @map("cree_le")
+  etudiant   Etudiant @relation(fields: [etudiantId], references: [id], onDelete: Cascade)
+
+  @@unique([etudiantId, matiere, notion])
+  @@map("difficulte")
+}

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Projet D'integration 
 #  AI Student Assistant
 
@@ -31,3 +32,6 @@ backend/      API FastAPI + PostgreSQL
 station/        scripts du Raspberry Pi
 docs/         schémas, maquettes
 ```
+=======
+# Projet D'integration
+>>>>>>> mcp.backend
