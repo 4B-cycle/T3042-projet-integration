@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Projet D'integration 
 #  AI Student Assistant
 
@@ -33,5 +32,3 @@ station/        scripts du Raspberry Pi
 docs/         schémas, maquettes
 ```
 =======
-# Projet D'integration
->>>>>>> mcp.backend
