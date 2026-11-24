@@ -38,17 +38,24 @@ def fabriquer_wav(texte):
     subprocess.run(["espeak-ng", "-v", "fr", "-s", VITESSE, "-w", FICHIER_VOIX, texte])
 
 
-def parler(texte):
-    """Lit le texte sur le haut-parleur. Attend la fin de la lecture avant de rendre la main."""
+def parler(texte, vitesse=1.0):
+    """Lit le texte sur le haut-parleur. Attend la fin de la lecture avant de rendre la main.
+
+    vitesse : 1.0 = normal, 0.8 = plus lent, 1.2 = plus rapide (la hauteur de la voix ne change pas).
+    """
     texte = nettoyer(texte)
     if not texte:
         return
     # 1. le texte devient un fichier WAV
     fabriquer_wav(texte)
-    # 2. ajouter 0,4 s de silence au début : le haut-parleur se réveille sans couper la phrase
+    # 2. changer la vitesse si demandé, et ajouter 0,4 s de silence au début
+    #    (le haut-parleur se réveille sans couper la phrase)
     #    (si sox n'est pas installé, on joue le fichier tel quel)
     try:
-        subprocess.run(["sox", FICHIER_VOIX, "/tmp/reponse_pad.wav", "pad", "0.4", "0"],
+        effets = ["pad", "0.4", "0"]
+        if vitesse != 1.0:
+            effets = ["tempo", str(vitesse)] + effets     # tempo : change la vitesse, pas la hauteur
+        subprocess.run(["sox", FICHIER_VOIX, "/tmp/reponse_pad.wav"] + effets,
                        check=True, stderr=subprocess.DEVNULL)
         a_jouer = "/tmp/reponse_pad.wav"
     except (FileNotFoundError, subprocess.CalledProcessError):
