@@ -8,7 +8,7 @@ Le principe : chaque information passe par au moins DEUX sens (la vue, l'ouïe, 
   - un flash blanc remplace le bip        -> pour les personnes sourdes
   - tout ce qui est dit est écrit, page par page, et c'est l'utilisateur qui tourne les pages
   - bouton tactile REPETER : relit la dernière réponse
-  - potentiomètre : vitesse de la voix (lente / normale / rapide)
+  - potentiomètre : le volume du haut-parleur (on règle au toucher, sans écran)
   - LDR : les LED s'adaptent à la lumière de la pièce
 
 Boutons :
@@ -54,7 +54,9 @@ GPIO_PRECEDENT = 13       # broche 33
 NOM_AGENT = "Tuteur Electronique"   # 20 caractères max
 FICHIER = "/tmp/question.wav"
 DUREE_MAX = 60            # secondes : on laisse le temps de parler (point « ne pas presser »)
-VOLUME = "60%"            # volume du haut-parleur : "30%" = bas, "100%" = maximum
+VOLUME = "60%"            # volume de départ (le potentiomètre le change ensuite)
+VOLUME_MIN = 10           # en %, potentiomètre tout à gauche (jamais complètement muet)
+VOLUME_MAX = 100          # en %, potentiomètre tout à droite
 
 ADS_ADRESSE = 0x48        # ADS1115 : ADDR relié au GND
 CANAL_POTAR = 0           # potentiomètre sur A0
@@ -101,7 +103,8 @@ etat = {
     "couleur": ROUGE,       # couleur fixe actuelle de la LED
     "rythme": None,         # None = fixe, sinon (allumé, éteint) en secondes
     "lumiere": 1.0,         # 0,25 (pièce sombre) à 1 (pièce claire)
-    "vitesse": 1,           # indice dans VITESSES
+    "vitesse": 1,           # indice dans VITESSES (voix normale)
+    "volume": None,         # volume actuel en %, réglé par le potentiomètre
 }
 
 JOURS = ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"]
@@ -119,7 +122,7 @@ def ads_demarrer():
         ads = smbus.SMBus(1)
         ads_lire(CANAL_POTAR)
     except (OSError, ImportError) as erreur:
-        print("[ADS1115] introuvable (" + str(erreur) + ") : vitesse normale, LED au maximum")
+        print("[ADS1115] introuvable (" + str(erreur) + ") : volume fixe, LED au maximum")
         ads = None
 
 
@@ -137,7 +140,7 @@ def ads_lire(canal):
 
 
 def lire_capteurs():
-    """Met à jour la lumière (LDR) et la vitesse de la voix (potentiomètre)."""
+    """Met à jour la lumière (LDR) et le volume (potentiomètre)."""
     if ads is None:
         return
     try:
@@ -150,15 +153,18 @@ def lire_capteurs():
     if nouvelle != etat["lumiere"]:
         etat["lumiere"] = nouvelle
         appliquer_led()
-    # potentiomètre : 3 crans
-    cran = 0 if potar < 0.33 else (1 if potar < 0.66 else 2)
-    if cran != etat["vitesse"]:
-        etat["vitesse"] = cran
-        nom = VITESSES[cran][1]
-        journal.etape("Vitesse de la voix : " + nom, journal.CYAN)
+    # potentiomètre : le volume, par pas de 5 %
+    volume = VOLUME_MIN + potar * (VOLUME_MAX - VOLUME_MIN)
+    volume = int(round(volume / 5) * 5)
+    if volume != etat["volume"]:
+        premiere_fois = etat["volume"] is None
+        etat["volume"] = volume
+        subprocess.run(["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", str(volume) + "%"])
+        journal.etape("Volume : " + str(volume) + " %", journal.CYAN)
         if etat["accueil"]:
-            lcd.ecrire("Voix : " + nom, 2)
-            dire("Voix " + nom + ".")
+            lcd.ecrire("Volume : " + str(volume) + " %", 2)
+        if not premiere_fois and not etat["parle"] and etat["micro"] is None:
+            melodie([("A4", 0.08)])      # petit bip : on entend le nouveau volume
 
 
 # --- La LED : couleur + rythme, réglée selon la lumière ---------------------------
@@ -240,7 +246,7 @@ def date_heure():
 
 def ecran_pret():
     lumiere_led(VERT)
-    lcd.afficher(NOM_AGENT, date_heure(), "Voix : " + VITESSES[etat["vitesse"]][1], "PARLER = question")
+    lcd.afficher(NOM_AGENT, date_heure(), "Volume : " + str(etat["volume"] or VOLUME.strip("%")) + " %", "PARLER = question")
     etat["accueil"] = True
 
 
