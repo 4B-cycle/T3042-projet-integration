@@ -8,6 +8,8 @@ load_dotenv(os.path.expanduser("~/station/station.env"))
 URL = os.environ["OPENWEBUI_URL"]
 CLE = os.environ["OPENWEBUI_CLE"]
 MODELE = os.environ["MODELE"]
+# HTTPS : vérifier le certificat du serveur ? (OPENWEBUI_VERIF_SSL=0 pour un certificat auto-signé)
+VERIF_SSL = os.environ.get("OPENWEBUI_VERIF_SSL", "1") != "0"
 
 # Consigne pour la station : les réponses sont LUES à voix haute et affichées sur un petit écran.
 CONSIGNE = ("Tes réponses sont lues à voix haute par une petite station et affichées sur un écran "
@@ -58,7 +60,8 @@ def talk_to_tuteur(question):
 
     try:
         reponse = requests.post(URL + "/api/chat/completions",
-                                json=donnees, headers=entetes, timeout=180)
+                                json=donnees, headers=entetes, timeout=180,
+                                verify=VERIF_SSL)
     except requests.exceptions.RequestException as erreur:
         historique.pop()                     # la question n'a pas eu de réponse : on l'oublie
         return "Serveur injoignable : " + str(erreur), 0
@@ -81,7 +84,7 @@ def transcrire(chemin_wav):
                                     headers=entetes, files=fichiers,
                                     data={"language": "fr",     # on parle français
                                           "prompt": VOCABULAIRE},  # les mots du cours
-                                    timeout=120)
+                                    timeout=120, verify=VERIF_SSL)
     except requests.exceptions.RequestException as erreur:
         return "Serveur injoignable : " + str(erreur), 0
 
