@@ -232,8 +232,10 @@ def lire_reponse_en_fond(texte):
     lumiere_led(ORANGE)
 
     def lire():
-        parler(texte, VITESSES[etat["vitesse"]][0])
-        evenements.put("fin_lecture")
+        try:
+            parler(texte, VITESSES[etat["vitesse"]][0])
+        finally:
+            evenements.put("fin_lecture")   # toujours, même si la lecture plante (sinon PARLER resterait bloqué)
 
     threading.Thread(target=lire, daemon=True).start()
 
