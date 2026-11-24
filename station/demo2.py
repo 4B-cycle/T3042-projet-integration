@@ -29,6 +29,7 @@ LED RGB :
 Lancement (depuis le dossier station) :  python3 demo2.py
 """
 import queue
+import subprocess
 import threading
 import time
 
@@ -53,6 +54,7 @@ GPIO_PRECEDENT = 13       # broche 33
 NOM_AGENT = "Tuteur Electronique"   # 20 caractères max
 FICHIER = "/tmp/question.wav"
 DUREE_MAX = 60            # secondes : on laisse le temps de parler (point « ne pas presser »)
+VOLUME = "60%"            # volume du haut-parleur : "30%" = bas, "100%" = maximum
 
 ADS_ADRESSE = 0x48        # ADS1115 : ADDR relié au GND
 CANAL_POTAR = 0           # potentiomètre sur A0
@@ -411,6 +413,8 @@ def vider_evenements():
 # --- La boucle principale ---------------------------------------------------------------
 def main():
     journal.titre("STATION TUTEUR ACCESSIBLE - " + NOM_AGENT)
+    # régler le volume du haut-parleur (la sortie par défaut de PipeWire)
+    subprocess.run(["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", VOLUME])
     lcd.initialiser()
     ads_demarrer()
     lire_capteurs()

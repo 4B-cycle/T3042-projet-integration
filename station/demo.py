@@ -15,6 +15,7 @@ Démo de la station : 2 boutons, LED RGB, écran LCD 20x4, micro, enceinte Bluet
 Lancement (depuis le dossier station) :  python3 demo.py
 """
 import queue
+import subprocess
 import time
 
 from gpiozero import Button, Buzzer, RGBLED
@@ -35,6 +36,7 @@ DUREE_BIP = 0.25          # secondes : durée d'un bip
 NOM_AGENT = "Tuteur Electronique"   # affiché en haut de l'écran d'accueil (20 caractères max)
 FICHIER = "/tmp/question.wav"
 DUREE_MAX = 30            # secondes : le micro s'arrête tout seul après ce temps
+VOLUME = "60%"            # volume du haut-parleur : "30%" = bas, "100%" = maximum
 
 ROUGE = (1, 0, 0)
 VERT = (0, 1, 0)
@@ -199,6 +201,8 @@ def vider_evenements():
 # --- La boucle principale ---------------------------------------------------------------
 def main():
     journal.titre("STATION TUTEUR - " + NOM_AGENT)
+    # régler le volume du haut-parleur (la sortie par défaut de PipeWire)
+    subprocess.run(["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", VOLUME])
     lcd.initialiser()
     allumer()
 
