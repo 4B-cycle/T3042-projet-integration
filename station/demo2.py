@@ -104,6 +104,7 @@ etat = {
     "rythme": None,         # None = fixe, sinon (allumé, éteint) en secondes
     "lumiere": 1.0,         # 0,25 (pièce sombre) à 1 (pièce claire)
     "vitesse": 1,           # indice dans VITESSES (voix normale)
+    "bouton_avant": False,  # état du bouton PARLER à la lecture précédente (pendant l'écoute)
     "volume": None,         # volume actuel en %, réglé par le potentiomètre
 }
 
@@ -330,6 +331,7 @@ def commencer_ecoute():
     flash(2)
     etat["micro"] = ouvrir_micro(FICHIER)
     etat["debut"] = time.time()
+    etat["bouton_avant"] = True      # il faut d'abord relâcher le bouton avant qu'un appui compte
     journal.etape("Micro ouvert : l'étudiant parle...", journal.BLEU)
 
 
@@ -430,10 +432,20 @@ def main():
 
     dernier_capteur = 0
     while True:
+        # pendant l'écoute, on regarde plus souvent (20 fois par seconde) pour réagir vite au bouton
+        attente = 0.05 if etat["micro"] is not None else 0.5
         try:
-            evenement = evenements.get(timeout=0.5)
+            evenement = evenements.get(timeout=attente)
         except queue.Empty:
             evenement = None
+
+        # Pendant l'écoute, on lit AUSSI le bouton PARLER directement (sans attendre son « message ») :
+        # si le message de l'appui se perd, le micro s'arrête quand même.
+        if etat["micro"] is not None:
+            appuye = bouton_parler.is_pressed
+            if appuye and not etat["bouton_avant"] and time.time() - etat["debut"] > 0.5:
+                evenement = "parler"
+            etat["bouton_avant"] = appuye
 
         if etat["micro"] is not None and time.time() - etat["debut"] > DUREE_MAX:
             evenement = "parler"
