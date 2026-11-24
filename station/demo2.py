@@ -438,6 +438,11 @@ def main():
         if etat["micro"] is not None and time.time() - etat["debut"] > DUREE_MAX:
             evenement = "parler"
 
+        if evenement is not None and evenement != "fin_lecture":
+            # pour vérifier que les boutons arrivent bien jusqu'au code
+            journal.etape("Bouton : " + evenement + "  (micro " + ("ouvert" if etat["micro"] else "fermé")
+                          + ", lecture " + ("en cours" if etat["parle"] else "finie") + ")")
+
         mettre_a_jour_ecran()
         if time.time() - dernier_capteur > 1:          # capteurs : une fois par seconde
             lire_capteurs()
