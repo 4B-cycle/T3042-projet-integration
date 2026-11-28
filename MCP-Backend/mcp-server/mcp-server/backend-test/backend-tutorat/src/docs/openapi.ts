@@ -14,15 +14,9 @@ const jsonErreur = {
   "application/json": { schema: { $ref: "#/components/schemas/Erreur" } },
 };
 
-const ref = (nom: string): OpenAPIV3.ReferenceObject => ({
-  $ref: `#/components/schemas/${nom}`,
-});
-const paramRef = (nom: string): OpenAPIV3.ReferenceObject => ({
-  $ref: `#/components/parameters/${nom}`,
-});
-const repRef = (nom: string): OpenAPIV3.ReferenceObject => ({
-  $ref: `#/components/responses/${nom}`,
-});
+const ref = (nom: string): OpenAPIV3.ReferenceObject => ({ $ref: `#/components/schemas/${nom}` });
+const paramRef = (nom: string): OpenAPIV3.ReferenceObject => ({ $ref: `#/components/parameters/${nom}` });
+const repRef = (nom: string): OpenAPIV3.ReferenceObject => ({ $ref: `#/components/responses/${nom}` });
 
 // ---------- Document ----------
 
@@ -36,10 +30,15 @@ export const openapiDocument: OpenAPIV3.Document = {
       "",
       "Ces routes sont appelées par le **serveur MCP**, pas directement par les étudiants.",
       "",
-      "**Authentification** : toutes les routes (sauf `/health`) exigent l'en-tête",
-      "`Authorization: Bearer <BACKEND_TOKEN>`. Dans Swagger UI, clique sur **Authorize** et colle le jeton.",
+      "**Authentification** : toutes les routes (sauf `/health`) exigent `Authorization: Bearer <jeton>`.",
+      "Il existe deux jetons :",
+      "- **BACKEND_TOKEN** (appels faits au nom d'un étudiant) + l'en-tête `X-OpenWebUI-User-Jwt`, le JWT signé",
+      "  par Open WebUI qui prouve l'identité. L'`{id}` de l'URL doit être celui du JWT, sinon **403**.",
+      "- **BACKEND_SERVICE_TOKEN** (boucle automatique du MCP) : seulement `/agendas` et les rappels.",
       "",
-      "**Identifiant étudiant** : `{id}` est l'identifiant Open WebUI de l'utilisateur.",
+      "Dans Swagger UI, clique sur **Authorize**. Pour fabriquer un JWT de test : `npm run jwt -- <id>`.",
+      "",
+      "**Identifiant étudiant** : `{id}` est l'identifiant Open WebUI de l'utilisateur (le `sub` du JWT).",
       "",
       "**Dates** : format `AAAA-MM-JJ HH:MM`, heure locale, **sans fuseau horaire**.",
     ].join("\n"),
@@ -47,23 +46,15 @@ export const openapiDocument: OpenAPIV3.Document = {
   servers: [{ url: "/", description: "Serveur courant" }],
   tags: [
     { name: "Système", description: "Vérification du serveur" },
-    {
-      name: "Rappels",
-      description: "Rappels manuels et événements Moodle importés",
-    },
-    {
-      name: "Agenda",
-      description: "Connexion du calendrier Moodle et du canal ntfy",
-    },
+    { name: "Rappels", description: "Rappels manuels et événements Moodle importés" },
+    { name: "Agenda", description: "Connexion du calendrier Moodle et du canal ntfy" },
     { name: "Exercices", description: "Banque d'exercices" },
-    {
-      name: "Difficultés",
-      description: "Notions mal maîtrisées par l'étudiant",
-    },
+    { name: "Difficultés", description: "Notions mal maîtrisées par l'étudiant" },
     { name: "Cours", description: "Recherche dans les cours" },
-    { name: "Examens", description: "Gestion des examens" },
+    { name: "Progression", description: "Résultats d'exercices et bilan, privés à chaque étudiant" },
   ],
-  security: [{ bearerAuth: [] }],
+  // Les DEUX éléments dans le même objet = les deux sont exigés (jeton ET JWT d'identité).
+  security: [{ bearerAuth: [], openWebUiJwt: [] }],
 
   paths: {
     // ----- Système -----
@@ -71,8 +62,7 @@ export const openapiDocument: OpenAPIV3.Document = {
       get: {
         tags: ["Système"],
         summary: "Vérifier que le serveur tourne",
-        description:
-          "Route publique (sans jeton), utile pour Docker ou la supervision.",
+        description: "Route publique (sans jeton), utile pour Docker ou la supervision.",
         security: [],
         responses: {
           "200": {
@@ -101,11 +91,7 @@ export const openapiDocument: OpenAPIV3.Document = {
         responses: {
           "200": {
             description: "Liste des rappels",
-            content: {
-              "application/json": {
-                schema: { type: "array", items: ref("Rappel") },
-              },
-            },
+            content: { "application/json": { schema: { type: "array", items: ref("Rappel") } } },
           },
           "401": repRef("NonAutorise"),
           "400": repRef("Invalide"),
@@ -129,8 +115,7 @@ export const openapiDocument: OpenAPIV3.Document = {
           "400": repRef("Invalide"),
           "401": repRef("NonAutorise"),
           "409": {
-            description:
-              "Un rappel avec ce `uid_externe` existe déjà pour cet étudiant",
+            description: "Un rappel avec ce `uid_externe` existe déjà pour cet étudiant",
             content: jsonErreur,
           },
         },
@@ -147,9 +132,7 @@ export const openapiDocument: OpenAPIV3.Document = {
           "Un rappel qui n'appartient pas à cet étudiant donne un 404.",
         requestBody: {
           required: true,
-          content: {
-            "application/json": { schema: ref("RappelModification") },
-          },
+          content: { "application/json": { schema: ref("RappelModification") } },
         },
         responses: {
           "200": {
@@ -164,8 +147,7 @@ export const openapiDocument: OpenAPIV3.Document = {
       delete: {
         tags: ["Rappels"],
         summary: "Supprimer un rappel",
-        description:
-          "Un rappel qui n'appartient pas à cet étudiant donne un 404.",
+        description: "Un rappel qui n'appartient pas à cet étudiant donne un 404.",
         responses: {
           "204": { description: "Rappel supprimé (pas de contenu)" },
           "400": repRef("Invalide"),
@@ -221,15 +203,14 @@ export const openapiDocument: OpenAPIV3.Document = {
         summary: "Lister les agendas de tous les étudiants",
         description:
           "Utilisé par la boucle de synchronisation du MCP.\n\n" +
+          "**Réservée au jeton service** (BACKEND_SERVICE_TOKEN) : un étudiant reçoit 403.\n\n" +
           "⚠️ Expose les secrets de **tous** les étudiants : ne jamais rendre cette route accessible hors du réseau interne.",
+        security: [{ serviceAuth: [] }],
         responses: {
+          "403": repRef("Interdit"),
           "200": {
             description: "Liste des agendas",
-            content: {
-              "application/json": {
-                schema: { type: "array", items: ref("Agenda") },
-              },
-            },
+            content: { "application/json": { schema: { type: "array", items: ref("Agenda") } } },
           },
           "401": repRef("NonAutorise"),
         },
@@ -265,49 +246,10 @@ export const openapiDocument: OpenAPIV3.Document = {
         responses: {
           "200": {
             description: "Liste d'exercices (éventuellement vide)",
-            content: {
-              "application/json": {
-                schema: { type: "array", items: ref("Exercice") },
-              },
-            },
+            content: { "application/json": { schema: { type: "array", items: ref("Exercice") } } },
           },
           "400": repRef("Invalide"),
           "401": repRef("NonAutorise"),
-        },
-      },
-    },
-
-    // ----- Examens -----
-    "/examens": {
-      get: {
-        tags: ["Examens"],
-        summary: "Lister tous les examens",
-        responses: {
-          "200": {
-            description: "Liste des examens",
-            content: {
-              "application/json": {
-                schema: { type: "array", items: ref("Examen") },
-              },
-            },
-          },
-          "401": repRef("NonAutorise"),
-        },
-      },
-    },
-    "/examens/{idExamen}": {
-      parameters: [paramRef("ExamenId")],
-      get: {
-        tags: ["Examens"],
-        summary: "Détail d'un examen et de ses exercices",
-        responses: {
-          "200": {
-            description: "Détail de l'examen",
-            content: { "application/json": { schema: ref("ExamenDetail") } },
-          },
-          "400": repRef("Invalide"),
-          "401": repRef("NonAutorise"),
-          "404": repRef("Introuvable"),
         },
       },
     },
@@ -322,11 +264,7 @@ export const openapiDocument: OpenAPIV3.Document = {
         responses: {
           "200": {
             description: "Liste des difficultés",
-            content: {
-              "application/json": {
-                schema: { type: "array", items: ref("Difficulte") },
-              },
-            },
+            content: { "application/json": { schema: { type: "array", items: ref("Difficulte") } } },
           },
           "400": repRef("Invalide"),
           "401": repRef("NonAutorise"),
@@ -349,6 +287,49 @@ export const openapiDocument: OpenAPIV3.Document = {
           },
           "400": repRef("Invalide"),
           "401": repRef("NonAutorise"),
+        },
+      },
+    },
+
+    // ----- Progression -----
+    "/etudiants/{id}/resultats": {
+      parameters: [paramRef("EtudiantId")],
+      post: {
+        tags: ["Progression"],
+        summary: "Enregistrer le résultat d'une tentative d'exercice",
+        description:
+          "Ajoute une ligne à l'historique de l'étudiant. L'étudiant est créé automatiquement s'il n'existe pas encore.",
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: ref("ResultatCreation") } },
+        },
+        responses: {
+          "201": {
+            description: "Résultat enregistré",
+            content: { "application/json": { schema: ref("Resultat") } },
+          },
+          "400": repRef("Invalide"),
+          "401": repRef("NonAutorise"),
+          "403": repRef("Interdit"),
+          "404": repRef("Introuvable"),
+        },
+      },
+    },
+
+    "/etudiants/{id}/progression": {
+      parameters: [paramRef("EtudiantId")],
+      get: {
+        tags: ["Progression"],
+        summary: "Bilan de progression par matière",
+        description: "Un étudiant sans résultat obtient `total_tentatives: 0` et une liste vide (rien n'est créé).",
+        responses: {
+          "200": {
+            description: "Bilan",
+            content: { "application/json": { schema: ref("Progression") } },
+          },
+          "400": repRef("Invalide"),
+          "401": repRef("NonAutorise"),
+          "403": repRef("Interdit"),
         },
       },
     },
@@ -382,11 +363,7 @@ export const openapiDocument: OpenAPIV3.Document = {
         responses: {
           "200": {
             description: "Liste de cours (éventuellement vide)",
-            content: {
-              "application/json": {
-                schema: { type: "array", items: ref("Cours") },
-              },
-            },
+            content: { "application/json": { schema: { type: "array", items: ref("Cours") } } },
           },
           "400": repRef("Invalide"),
           "401": repRef("NonAutorise"),
@@ -400,7 +377,20 @@ export const openapiDocument: OpenAPIV3.Document = {
       bearerAuth: {
         type: "http",
         scheme: "bearer",
-        description: "Jeton partagé avec le MCP (variable BACKEND_TOKEN).",
+        description: "Jeton « étudiant » partagé avec le MCP (variable BACKEND_TOKEN).",
+      },
+      openWebUiJwt: {
+        type: "apiKey",
+        in: "header",
+        name: "X-OpenWebUI-User-Jwt",
+        description:
+          "JWT d'identité signé (HS256) par Open WebUI. Son champ `sub` doit être égal à l'`{id}` de l'URL. " +
+          "En test : `npm run jwt -- <id>`.",
+      },
+      serviceAuth: {
+        type: "http",
+        scheme: "bearer",
+        description: "Jeton « service » de la boucle automatique du MCP (variable BACKEND_SERVICE_TOKEN).",
       },
     },
 
@@ -409,14 +399,8 @@ export const openapiDocument: OpenAPIV3.Document = {
         name: "id",
         in: "path",
         required: true,
-        description:
-          "Identifiant Open WebUI de l'étudiant (lettres, chiffres, _ et - uniquement)",
-        schema: {
-          type: "string",
-          minLength: 1,
-          maxLength: 100,
-          pattern: "^[A-Za-z0-9_-]+$",
-        },
+        description: "Identifiant Open WebUI de l'étudiant (lettres, chiffres, _ et - uniquement)",
+        schema: { type: "string", minLength: 1, maxLength: 100, pattern: "^[A-Za-z0-9_-]+$" },
         example: "1",
       },
       RappelId: {
@@ -427,19 +411,20 @@ export const openapiDocument: OpenAPIV3.Document = {
         schema: { type: "integer", minimum: 1 },
         example: 12,
       },
-      ExamenId: {
-        name: "idExamen",
-        in: "path",
-        required: true,
-        description: "Identifiant de l'examen",
-        schema: { type: "integer", minimum: 1 },
-        example: 1,
-      },
     },
 
     responses: {
+      Interdit: {
+        description: "Accès refusé : cette route ou les données de cet étudiant ne sont pas accessibles avec cette identité",
+        content: {
+          "application/json": {
+            schema: ref("Erreur"),
+            example: { error: "Accès refusé" },
+          },
+        },
+      },
       NonAutorise: {
-        description: "Jeton absent ou incorrect",
+        description: "Jeton absent ou incorrect, ou JWT d'identité manquant, invalide ou expiré",
         content: {
           "application/json": {
             schema: ref("Erreur"),
@@ -448,8 +433,7 @@ export const openapiDocument: OpenAPIV3.Document = {
         },
       },
       Invalide: {
-        description:
-          "Données invalides (format, longueur, valeur hors plage...)",
+        description: "Données invalides (format, longueur, valeur hors plage...)",
         content: { "application/json": { schema: ref("ErreurValidation") } },
       },
       Introuvable: {
@@ -484,13 +468,7 @@ export const openapiDocument: OpenAPIV3.Document = {
 
       Rappel: {
         type: "object",
-        required: [
-          "id",
-          "titre",
-          "date_heure",
-          "uid_externe",
-          "palier_notifie",
-        ],
+        required: ["id", "titre", "date_heure", "uid_externe", "palier_notifie"],
         properties: {
           id: { type: "integer", example: 12 },
           titre: { type: "string", example: "Examen de réseau" },
@@ -503,14 +481,12 @@ export const openapiDocument: OpenAPIV3.Document = {
           uid_externe: {
             type: "string",
             nullable: true,
-            description:
-              "Identifiant de l'événement Moodle ; null pour un rappel manuel",
+            description: "Identifiant de l'événement Moodle ; null pour un rappel manuel",
           },
           palier_notifie: {
             type: "integer",
             nullable: true,
-            description:
-              "Dernier palier de notification envoyé, en heures (72, 24, 2) ; null si aucun",
+            description: "Dernier palier de notification envoyé, en heures (72, 24, 2) ; null si aucun",
             example: 24,
           },
         },
@@ -519,24 +495,13 @@ export const openapiDocument: OpenAPIV3.Document = {
         type: "object",
         required: ["titre", "date_heure"],
         properties: {
-          titre: {
-            type: "string",
-            minLength: 1,
-            maxLength: 200,
-            example: "Réviser le chapitre 3",
-          },
+          titre: { type: "string", minLength: 1, maxLength: 200, example: "Réviser le chapitre 3" },
           date_heure: {
             type: "string",
-            description:
-              "AAAA-MM-JJ HH:MM (le format ISO avec T est accepté ; pas de fuseau ni de Z)",
+            description: "AAAA-MM-JJ HH:MM (le format ISO avec T est accepté ; pas de fuseau ni de Z)",
             example: "2026-11-05 14:00",
           },
-          uid_externe: {
-            type: "string",
-            nullable: true,
-            minLength: 1,
-            maxLength: 500,
-          },
+          uid_externe: { type: "string", nullable: true, minLength: 1, maxLength: 500 },
         },
       },
       RappelModification: {
@@ -554,11 +519,7 @@ export const openapiDocument: OpenAPIV3.Document = {
         required: ["etudiant_id", "url_ical", "sujet_ntfy"],
         properties: {
           etudiant_id: { type: "string", example: "1" },
-          url_ical: {
-            type: "string",
-            format: "uri",
-            description: "Contient un jeton Moodle personnel (secret)",
-          },
+          url_ical: { type: "string", format: "uri", description: "Contient un jeton Moodle personnel (secret)" },
           sujet_ntfy: { type: "string", description: "Sujet ntfy (secret)" },
         },
       },
@@ -570,10 +531,8 @@ export const openapiDocument: OpenAPIV3.Document = {
             type: "string",
             format: "uri",
             maxLength: 2000,
-            description:
-              "https uniquement, sur l'hôte autorisé (AGENDA_HOTE_AUTORISE)",
-            example:
-              "https://moodle.ephec.be/calendar/export_execute.php?userid=0&authtoken=xxxx",
+            description: "https uniquement, sur l'hôte autorisé (AGENDA_HOTE_AUTORISE)",
+            example: "https://moodle.ephec.be/calendar/export_execute.php?userid=0&authtoken=xxxx",
           },
           sujet_ntfy: {
             type: "string",
@@ -592,33 +551,7 @@ export const openapiDocument: OpenAPIV3.Document = {
           id: { type: "integer", example: 3 },
           matiere: { type: "string", example: "réseau" },
           niveau: { type: "integer", minimum: 1, maximum: 3, example: 2 },
-          enonce: {
-            type: "string",
-            example:
-              "Calcule le masque correspondant à /26 et le nombre d'hôtes utilisables.",
-          },
-        },
-      },
-
-      Examen: {
-        type: "object",
-        required: ["id", "titre", "matiere", "date_prevue"],
-        properties: {
-          id: { type: "integer", example: 1 },
-          titre: { type: "string", example: "Examen de Réseaux" },
-          matiere: { type: "string", example: "Réseaux" },
-          date_prevue: { type: "string", nullable: true, format: "date-time" },
-        },
-      },
-      ExamenDetail: {
-        type: "object",
-        required: ["id", "titre", "matiere", "date_prevue", "exercices"],
-        properties: {
-          id: { type: "integer", example: 1 },
-          titre: { type: "string", example: "Examen de Réseaux" },
-          matiere: { type: "string", example: "Réseaux" },
-          date_prevue: { type: "string", nullable: true, format: "date-time" },
-          exercices: { type: "array", items: ref("Exercice") },
+          enonce: { type: "string", example: "Calcule le masque correspondant à /26 et le nombre d'hôtes utilisables." },
         },
       },
 
@@ -626,17 +559,48 @@ export const openapiDocument: OpenAPIV3.Document = {
         type: "object",
         required: ["matiere", "notion"],
         properties: {
-          matiere: {
-            type: "string",
-            minLength: 1,
-            maxLength: 100,
-            example: "réseau",
-          },
-          notion: {
-            type: "string",
-            minLength: 1,
-            maxLength: 200,
-            example: "calcul de masques de sous-réseau",
+          matiere: { type: "string", minLength: 1, maxLength: 100, example: "réseau" },
+          notion: { type: "string", minLength: 1, maxLength: 200, example: "calcul de masques de sous-réseau" },
+        },
+      },
+
+      ResultatCreation: {
+        type: "object",
+        required: ["exercice_id", "reussi"],
+        properties: {
+          exercice_id: { type: "integer", minimum: 1, example: 3 },
+          reussi: { type: "boolean", example: true },
+          score: { type: "integer", nullable: true, minimum: 0, maximum: 100, example: 80 },
+        },
+      },
+      Resultat: {
+        type: "object",
+        required: ["id", "exercice_id", "reussi", "score"],
+        properties: {
+          id: { type: "integer", example: 7 },
+          exercice_id: { type: "integer", example: 3 },
+          reussi: { type: "boolean", example: true },
+          score: { type: "integer", nullable: true, example: 80 },
+        },
+      },
+      Progression: {
+        type: "object",
+        required: ["total_tentatives", "par_matiere"],
+        properties: {
+          total_tentatives: { type: "integer", example: 12 },
+          par_matiere: {
+            type: "array",
+            items: {
+              type: "object",
+              required: ["matiere", "tentatives", "reussies", "taux_reussite", "derniere_tentative"],
+              properties: {
+                matiere: { type: "string", example: "réseau" },
+                tentatives: { type: "integer", example: 8 },
+                reussies: { type: "integer", example: 6 },
+                taux_reussite: { type: "integer", description: "Pourcentage arrondi", example: 75 },
+                derniere_tentative: { type: "string", format: "date-time" },
+              },
+            },
           },
         },
       },
@@ -648,10 +612,7 @@ export const openapiDocument: OpenAPIV3.Document = {
           id: { type: "integer", example: 1 },
           titre: { type: "string", example: "Le modèle OSI" },
           matiere: { type: "string", example: "réseau" },
-          resume: {
-            type: "string",
-            example: "Les 7 couches du modèle OSI et le rôle de chacune.",
-          },
+          resume: { type: "string", example: "Les 7 couches du modèle OSI et le rôle de chacune." },
         },
       },
     },

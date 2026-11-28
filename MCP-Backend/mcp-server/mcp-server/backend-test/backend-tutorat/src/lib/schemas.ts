@@ -53,6 +53,13 @@ export const difficulteBody = z.object({
   notion: z.string().trim().min(1).max(200),
 });
 
+// Résultat d'une tentative d'exercice : c'est la base de la progression de l'étudiant.
+export const resultatBody = z.object({
+  exercice_id: z.number().int().positive(),
+  reussi: z.boolean(),
+  score: z.number().int().min(0).max(100).nullish(),
+});
+
 export const coursQuery = z.object({
   recherche: z.string().trim().max(200).optional(),
   matiere: z.string().trim().max(100).optional(),

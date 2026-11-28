@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { prismaMock, resetPrismaMock } from "./mocks/db.js";
-import { AUTH, creerApp, type App } from "./helpers.js";
+import { AUTH, AUTH_SERVICE, creerApp, type App } from "./helpers.js";
 
 vi.mock("../src/db.js", async () => ({ prisma: (await import("./mocks/db.js")).prismaMock }));
 
@@ -85,10 +85,10 @@ describe("routes agenda", () => {
     });
   });
 
-  describe("GET /agendas", () => {
+  describe("GET /agendas (réservé au jeton service)", () => {
     it("renvoie [] s'il n'y a aucun agenda", async () => {
       prismaMock.agenda.findMany.mockResolvedValue([]);
-      const r = await app.inject({ method: "GET", url: "/agendas", headers: AUTH });
+      const r = await app.inject({ method: "GET", url: "/agendas", headers: AUTH_SERVICE });
       expect(r.statusCode).toBe(200);
       expect(r.json()).toEqual([]);
     });
@@ -98,7 +98,7 @@ describe("routes agenda", () => {
         { ...agendaEnBase, etudiant },
         { ...agendaEnBase, id: 6, sujetNtfy: "autre-sujet-456", etudiant: { ...etudiant, id: 2, openwebuiId: "bob" } },
       ]);
-      const r = await app.inject({ method: "GET", url: "/agendas", headers: AUTH });
+      const r = await app.inject({ method: "GET", url: "/agendas", headers: AUTH_SERVICE });
       expect(r.statusCode).toBe(200);
       expect(r.json()).toEqual([
         { etudiant_id: "alice", url_ical: URL_VALIDE, sujet_ntfy: "sujet-secret-123" },

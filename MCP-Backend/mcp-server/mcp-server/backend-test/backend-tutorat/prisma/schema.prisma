@@ -1,5 +1,5 @@
-// Schéma de la base (EPIC 17). Version 1 : uniquement ce qu'utilisent les 9 outils du MCP.
-// Les tables des autres EPIC (résultats, examens, planning, notifications...) viendront ensuite.
+// Schéma de la base (EPIC 17). Contient ce qu'utilisent les outils du MCP (étudiants, rappels, agenda,
+// exercices, difficultés, cours, examens) et la progression (résultats). Planning, notifications... : plus tard.
 
 generator client {
   provider = "prisma-client-js"
@@ -11,7 +11,7 @@ datasource db {
 }
 
 // Un étudiant = un utilisateur Open WebUI. Open WebUI envoie son propre identifiant
-// (en-tête x-openwebui-user-id, souvent un UUID) : on le garde dans openwebuiId.
+// (champ "sub" du JWT signé qu'il envoie, souvent un UUID) : on le garde dans openwebuiId.
 model Etudiant {
   id          Int          @id @default(autoincrement())
   openwebuiId String       @unique @map("openwebui_id")
@@ -19,6 +19,7 @@ model Etudiant {
   rappels     Rappel[]
   agenda      Agenda?
   difficultes Difficulte[]
+  resultats   Resultat[]
 
   @@map("etudiant")
 }
@@ -74,6 +75,7 @@ model Exercice {
   // Nouveaux champs pour la relation Examen
   examenId  Int?    @map("examen_id")
   examen    Examen? @relation(fields: [examenId], references: [id], onDelete: Cascade)
+  resultats Resultat[]
 
   @@index([matiere, niveau])
   @@map("exercice")
@@ -102,4 +104,21 @@ model Difficulte {
 
   @@unique([etudiantId, matiere, notion])
   @@map("difficulte")
+}
+
+// Une ligne = une tentative d'un étudiant sur un exercice. Données PRIVÉES de l'étudiant :
+// les routes ne les montrent qu'à lui (voir src/plugins/auth.ts).
+model Resultat {
+  id         Int      @id @default(autoincrement())
+  etudiantId Int      @map("etudiant_id")
+  exerciceId Int      @map("exercice_id")
+  reussi     Boolean
+  // Note sur 100, facultative.
+  score      Int?
+  creeLe     DateTime @default(now()) @map("cree_le")
+  etudiant   Etudiant @relation(fields: [etudiantId], references: [id], onDelete: Cascade)
+  exercice   Exercice @relation(fields: [exerciceId], references: [id], onDelete: Cascade)
+
+  @@index([etudiantId, creeLe])
+  @@map("resultat")
 }

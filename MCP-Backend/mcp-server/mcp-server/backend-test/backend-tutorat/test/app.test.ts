@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { prismaMock, resetPrismaMock } from "./mocks/db.js";
-import { AUTH, creerApp } from "./helpers.js";
+import { AUTH, AUTH_SERVICE, creerApp } from "./helpers.js";
 
 vi.mock("../src/db.js", async () => ({ prisma: (await import("./mocks/db.js")).prismaMock }));
 
@@ -24,7 +24,7 @@ describe("app : gestion d'erreurs et authentification", () => {
   it("renvoie 500 générique pour une erreur inattendue (détail non exposé)", async () => {
     prismaMock.agenda.findMany.mockRejectedValue(new Error("mot de passe DB: secret"));
     const app = await creerApp();
-    const r = await app.inject({ method: "GET", url: "/agendas", headers: AUTH });
+    const r = await app.inject({ method: "GET", url: "/agendas", headers: AUTH_SERVICE });
     expect(r.statusCode).toBe(500);
     expect(r.json()).toEqual({ error: "Erreur interne" });
     expect(r.body).not.toContain("secret");
@@ -60,7 +60,7 @@ describe("app : gestion d'erreurs et authentification", () => {
     it("accepte le bon jeton", async () => {
       prismaMock.agenda.findMany.mockResolvedValue([]);
       const app = await creerApp();
-      const r = await app.inject({ method: "GET", url: "/agendas", headers: AUTH });
+      const r = await app.inject({ method: "GET", url: "/agendas", headers: AUTH_SERVICE });
       expect(r.statusCode).toBe(200);
       await app.close();
     });

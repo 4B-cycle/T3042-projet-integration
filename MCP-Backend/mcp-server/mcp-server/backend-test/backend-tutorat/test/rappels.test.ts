@@ -50,10 +50,11 @@ describe("routes /etudiants/:id/rappels", () => {
       });
     });
 
-    it("refuse un identifiant avec des caractères interdits (400)", async () => {
+    it("refuse un identifiant qui n'est pas celui de l'étudiant connecté (403)", async () => {
+      // "al ice" ne correspond à aucun JWT valide : le contrôle d'accès répond avant la validation.
       const r = await app.inject({ method: "GET", url: "/etudiants/al%20ice/rappels", headers: AUTH });
-      expect(r.statusCode).toBe(400);
-      expect(r.json().error).toBe("Données invalides");
+      expect(r.statusCode).toBe(403);
+      expect(r.json().error).toBe("Accès refusé");
     });
   });
 

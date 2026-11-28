@@ -7,9 +7,9 @@ Il remplace `faux_backend.py` du serveur MCP et respecte le contrat décrit dans
 
 ```bash
 npm install
-cp .env.example .env            # puis modifie BACKEND_TOKEN
+cp .env.example .env            # puis remplace les 3 secrets (voir « Authentification »)
 docker compose up -d            # PostgreSQL
-npx prisma migrate dev --name init   # crée les tables
+npx prisma migrate dev --name init   # crée les tables (puis, après un ajout au schéma : --name resultats)
 npm run db:seed                 # cours et exercices de test
 npm run dev                     # http://localhost:8001
 ```
@@ -20,10 +20,35 @@ Dans le terminal qui lance `server.py` :
 
 ```
 BACKEND_URL=http://localhost:8001
-BACKEND_TOKEN=<la même valeur que dans .env>
+BACKEND_TOKEN=<la même valeur que BACKEND_TOKEN dans .env>
+BACKEND_SERVICE_TOKEN=<la même valeur que BACKEND_SERVICE_TOKEN dans .env>
 ```
 
-## Les 11 routes (toutes protégées par `Authorization: Bearer <jeton>`)
+## Authentification : qui est l'étudiant ?
+
+```
+Étudiant → Open WebUI ──► MCP ──(jeton + JWT d'identité)──► Backend ──► PostgreSQL
+```
+
+Open WebUI signe l'identité de l'utilisateur connecté dans un **JWT** (HS256, valable 5 min) et l'envoie au
+MCP dans l'en-tête `X-OpenWebUI-User-Jwt`. Le MCP le transmet tel quel ; **le backend vérifie la signature**
+(`src/lib/jwt.ts`) et en déduit l'étudiant. L'`{id}` d'une URL n'est donc plus cru sur parole.
+
+| Appelant | Envoie | Accès |
+|---|---|---|
+| Étudiant (outils du chat) | `BACKEND_TOKEN` + JWT d'identité | uniquement `/etudiants/<son id>/…`, `/cours`, `/examens` ; autre `{id}` → **403** ; `/agendas` → **403** |
+| Service (boucle automatique du MCP) | `BACKEND_SERVICE_TOKEN` | uniquement `/agendas` et `/etudiants/{id}/rappels…` ; le reste → **403** |
+
+- **401** : jeton incorrect, ou JWT absent / falsifié / expiré. **403** : identité connue mais accès interdit.
+- Trois secrets **différents** dans `.env` : `BACKEND_TOKEN`, `BACKEND_SERVICE_TOKEN`, `OPENWEBUI_JWT_SECRET`
+  (ce dernier = `FORWARD_USER_INFO_HEADER_JWT_SECRET` d'Open WebUI). Le backend refuse de démarrer si l'un
+  manque, est trop court ou est identique à un autre.
+- Côté Open WebUI (variables d'environnement) : `ENABLE_FORWARD_USER_INFO_HEADERS=true` et
+  `FORWARD_USER_INFO_HEADER_JWT_SECRET=<OPENWEBUI_JWT_SECRET>`, puis redémarrer Open WebUI.
+- Tester sans Open WebUI : `npm run jwt -- alice` fabrique un JWT valable 1 h, à mettre dans l'en-tête
+  `X-OpenWebUI-User-Jwt` avec `Authorization: Bearer <BACKEND_TOKEN>`.
+
+## Les 13 routes (toutes protégées, voir ci-dessus)
 
 | # | Route | Fichier |
 |---|---|---|
@@ -38,8 +63,10 @@ BACKEND_TOKEN=<la même valeur que dans .env>
 | 9 | GET `/etudiants/{id}/difficultes` | routes/tutorat.ts |
 | 10 | POST `/etudiants/{id}/difficultes` | routes/tutorat.ts |
 | 11 | GET `/cours` | routes/tutorat.ts |
+| 12 | POST `/etudiants/{id}/resultats` | routes/resultats.ts |
+| 13 | GET `/etudiants/{id}/progression` | routes/resultats.ts |
 
-Plus `GET /health` (sans jeton).
+Plus `GET /health` (sans jeton) et les 2 routes `/examens` (pas encore documentées dans Swagger).
 
 ## Commandes utiles
 
@@ -56,7 +83,7 @@ Plus `GET /health` (sans jeton).
 
 Une fois `npm run dev` lancé : **http://localhost:8001/docs**
 
-1. Clique sur **Authorize** (cadenas) et colle ton `BACKEND_TOKEN`.
+1. Clique sur **Authorize** (cadenas) : colle `BACKEND_TOKEN` dans `bearerAuth` et un JWT (`npm run jwt -- <id>`) dans `openWebUiJwt`.
 2. Ouvre une route, clique sur **Try it out**, remplis les champs, puis **Execute**.
 
 - Document brut : `http://localhost:8001/docs/json`

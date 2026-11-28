@@ -48,12 +48,17 @@ describe("routes tutorat", () => {
       ["niveau trop grand", "/etudiants/alice/exercices?matiere=sql&niveau=4"],
       ["niveau à 0", "/etudiants/alice/exercices?matiere=sql&niveau=0"],
       ["niveau non numérique", "/etudiants/alice/exercices?matiere=sql&niveau=facile"],
-      ["identifiant invalide", "/etudiants/al%20ice/exercices?matiere=sql"],
     ])("renvoie 400 : %s", async (_nom, url) => {
       const r = await app.inject({ method: "GET", url, headers: AUTH });
       expect(r.statusCode).toBe(400);
       expect(prismaMock.exercice.findMany).not.toHaveBeenCalled();
     });
+  });
+
+  it("renvoie 403 si l'{id} n'est pas celui de l'étudiant connecté", async () => {
+    const r = await app.inject({ method: "GET", url: "/etudiants/al%20ice/exercices?matiere=sql", headers: AUTH });
+    expect(r.statusCode).toBe(403);
+    expect(prismaMock.exercice.findMany).not.toHaveBeenCalled();
   });
 
   // ---------- Difficultés ----------

@@ -9,6 +9,7 @@ import { agendaRoutes } from "./routes/agenda.js";
 import { rappelsRoutes } from "./routes/rappels.js";
 import { tutoratRoutes } from "./routes/tutorat.js";
 import { examensRoutes } from "./routes/examens.js";
+import { resultatsRoutes } from "./routes/resultats.js";
 
 /** Construit l'application (séparée de server.ts pour pouvoir la tester sans ouvrir de port). */
 export async function buildApp() {
@@ -45,13 +46,15 @@ export async function buildApp() {
   // Route publique, sans jeton : pour vérifier que le serveur tourne (Docker, supervision).
   app.get("/health", async () => ({ status: "ok" }));
 
-  // Tout ce qui est enregistré dans ce bloc passe d'abord par la vérification du jeton.
+  // Tout ce qui est enregistré dans ce bloc passe d'abord par verifierToken : il identifie l'appelant
+  // (étudiant ou service) et refuse (403) l'accès aux données d'un autre étudiant.
   await app.register(async (protege) => {
     protege.addHook("onRequest", verifierToken);
     await protege.register(rappelsRoutes);
     await protege.register(agendaRoutes);
     await protege.register(tutoratRoutes);
     await protege.register(examensRoutes);
+    await protege.register(resultatsRoutes);
   });
 
   return app;

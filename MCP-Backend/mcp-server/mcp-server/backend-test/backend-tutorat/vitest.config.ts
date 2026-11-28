@@ -5,6 +5,8 @@ export default defineConfig({
   test: {
     env: {
       BACKEND_TOKEN: "jeton-de-test-0123456789",
+      BACKEND_SERVICE_TOKEN: "jeton-service-test-0123456789",
+      OPENWEBUI_JWT_SECRET: "secret-jwt-test-0123456789abcdef",
       DATABASE_URL: "postgresql://test:test@localhost:5432/test",
       LOG_LEVEL: "silent", // pas de logs Fastify dans la sortie des tests
     },

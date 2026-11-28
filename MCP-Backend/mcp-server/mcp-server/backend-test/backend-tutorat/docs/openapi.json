@@ -3,7 +3,7 @@
   "info": {
     "title": "API Backend – Agent IA de tutorat",
     "version": "0.1.0",
-    "description": "Backend du projet d'agent IA de tutorat (EPIC 13 et 17).\n\nCes routes sont appelées par le **serveur MCP**, pas directement par les étudiants.\n\n**Authentification** : toutes les routes (sauf `/health`) exigent l'en-tête\n`Authorization: Bearer <BACKEND_TOKEN>`. Dans Swagger UI, clique sur **Authorize** et colle le jeton.\n\n**Identifiant étudiant** : `{id}` est l'identifiant Open WebUI de l'utilisateur.\n\n**Dates** : format `AAAA-MM-JJ HH:MM`, heure locale, **sans fuseau horaire**."
+    "description": "Backend du projet d'agent IA de tutorat (EPIC 13 et 17).\n\nCes routes sont appelées par le **serveur MCP**, pas directement par les étudiants.\n\n**Authentification** : toutes les routes (sauf `/health`) exigent `Authorization: Bearer <jeton>`.\nIl existe deux jetons :\n- **BACKEND_TOKEN** (appels faits au nom d'un étudiant) + l'en-tête `X-OpenWebUI-User-Jwt`, le JWT signé\n  par Open WebUI qui prouve l'identité. L'`{id}` de l'URL doit être celui du JWT, sinon **403**.\n- **BACKEND_SERVICE_TOKEN** (boucle automatique du MCP) : seulement `/agendas` et les rappels.\n\nDans Swagger UI, clique sur **Authorize**. Pour fabriquer un JWT de test : `npm run jwt -- <id>`.\n\n**Identifiant étudiant** : `{id}` est l'identifiant Open WebUI de l'utilisateur (le `sub` du JWT).\n\n**Dates** : format `AAAA-MM-JJ HH:MM`, heure locale, **sans fuseau horaire**."
   },
   "servers": [
     {
@@ -35,11 +35,16 @@
     {
       "name": "Cours",
       "description": "Recherche dans les cours"
+    },
+    {
+      "name": "Progression",
+      "description": "Résultats d'exercices et bilan, privés à chaque étudiant"
     }
   ],
   "security": [
     {
-      "bearerAuth": []
+      "bearerAuth": [],
+      "openWebUiJwt": []
     }
   ],
   "paths": {
@@ -296,7 +301,12 @@
           "Agenda"
         ],
         "summary": "Lister les agendas de tous les étudiants",
-        "description": "Utilisé par la boucle de synchronisation du MCP.\n\n⚠️ Expose les secrets de **tous** les étudiants : ne jamais rendre cette route accessible hors du réseau interne.",
+        "description": "Utilisé par la boucle de synchronisation du MCP.\n\n**Réservée au jeton service** (BACKEND_SERVICE_TOKEN) : un étudiant reçoit 403.\n\n⚠️ Expose les secrets de **tous** les étudiants : ne jamais rendre cette route accessible hors du réseau interne.",
+        "security": [
+          {
+            "serviceAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Liste des agendas",
@@ -313,6 +323,9 @@
           },
           "401": {
             "$ref": "#/components/responses/NonAutorise"
+          },
+          "403": {
+            "$ref": "#/components/responses/Interdit"
           }
         }
       }
@@ -447,6 +460,89 @@
         }
       }
     },
+    "/etudiants/{id}/resultats": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/EtudiantId"
+        }
+      ],
+      "post": {
+        "tags": [
+          "Progression"
+        ],
+        "summary": "Enregistrer le résultat d'une tentative d'exercice",
+        "description": "Ajoute une ligne à l'historique de l'étudiant. L'étudiant est créé automatiquement s'il n'existe pas encore.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResultatCreation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Résultat enregistré",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resultat"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalide"
+          },
+          "401": {
+            "$ref": "#/components/responses/NonAutorise"
+          },
+          "403": {
+            "$ref": "#/components/responses/Interdit"
+          },
+          "404": {
+            "$ref": "#/components/responses/Introuvable"
+          }
+        }
+      }
+    },
+    "/etudiants/{id}/progression": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/EtudiantId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Progression"
+        ],
+        "summary": "Bilan de progression par matière",
+        "description": "Un étudiant sans résultat obtient `total_tentatives: 0` et une liste vide (rien n'est créé).",
+        "responses": {
+          "200": {
+            "description": "Bilan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Progression"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Invalide"
+          },
+          "401": {
+            "$ref": "#/components/responses/NonAutorise"
+          },
+          "403": {
+            "$ref": "#/components/responses/Interdit"
+          }
+        }
+      }
+    },
     "/cours": {
       "get": {
         "tags": [
@@ -507,7 +603,18 @@
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "description": "Jeton partagé avec le MCP (variable BACKEND_TOKEN)."
+        "description": "Jeton « étudiant » partagé avec le MCP (variable BACKEND_TOKEN)."
+      },
+      "openWebUiJwt": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-OpenWebUI-User-Jwt",
+        "description": "JWT d'identité signé (HS256) par Open WebUI. Son champ `sub` doit être égal à l'`{id}` de l'URL. En test : `npm run jwt -- <id>`."
+      },
+      "serviceAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Jeton « service » de la boucle automatique du MCP (variable BACKEND_SERVICE_TOKEN)."
       }
     },
     "parameters": {
@@ -537,8 +644,21 @@
       }
     },
     "responses": {
+      "Interdit": {
+        "description": "Accès refusé : cette route ou les données de cet étudiant ne sont pas accessibles avec cette identité",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Erreur"
+            },
+            "example": {
+              "error": "Accès refusé"
+            }
+          }
+        }
+      },
       "NonAutorise": {
-        "description": "Jeton absent ou incorrect",
+        "description": "Jeton absent ou incorrect, ou JWT d'identité manquant, invalide ou expiré",
         "content": {
           "application/json": {
             "schema": {
@@ -783,6 +903,108 @@
             "minLength": 1,
             "maxLength": 200,
             "example": "calcul de masques de sous-réseau"
+          }
+        }
+      },
+      "ResultatCreation": {
+        "type": "object",
+        "required": [
+          "exercice_id",
+          "reussi"
+        ],
+        "properties": {
+          "exercice_id": {
+            "type": "integer",
+            "minimum": 1,
+            "example": 3
+          },
+          "reussi": {
+            "type": "boolean",
+            "example": true
+          },
+          "score": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 100,
+            "example": 80
+          }
+        }
+      },
+      "Resultat": {
+        "type": "object",
+        "required": [
+          "id",
+          "exercice_id",
+          "reussi",
+          "score"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 7
+          },
+          "exercice_id": {
+            "type": "integer",
+            "example": 3
+          },
+          "reussi": {
+            "type": "boolean",
+            "example": true
+          },
+          "score": {
+            "type": "integer",
+            "nullable": true,
+            "example": 80
+          }
+        }
+      },
+      "Progression": {
+        "type": "object",
+        "required": [
+          "total_tentatives",
+          "par_matiere"
+        ],
+        "properties": {
+          "total_tentatives": {
+            "type": "integer",
+            "example": 12
+          },
+          "par_matiere": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "matiere",
+                "tentatives",
+                "reussies",
+                "taux_reussite",
+                "derniere_tentative"
+              ],
+              "properties": {
+                "matiere": {
+                  "type": "string",
+                  "example": "réseau"
+                },
+                "tentatives": {
+                  "type": "integer",
+                  "example": 8
+                },
+                "reussies": {
+                  "type": "integer",
+                  "example": 6
+                },
+                "taux_reussite": {
+                  "type": "integer",
+                  "description": "Pourcentage arrondi",
+                  "example": 75
+                },
+                "derniere_tentative": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
           }
         }
       },
